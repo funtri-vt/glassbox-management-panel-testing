@@ -38,10 +38,11 @@
         .admin-controls h3 { margin-top: 0; margin-bottom: 0.5rem; font-size: 1.1rem; color: #111827; }
         .admin-controls textarea { width: 100%; margin-top: 0.5rem; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; font-family: monospace; resize: vertical; box-sizing: border-box;}
         
-        /* Status Text */
+        /* Status Text & Logging */
         #statusText { margin-top: 1rem; font-weight: bold; }
         .text-error { color: #dc2626; }
         .text-success { color: #059669; }
+        #errorLog { display: none; background: #fee2e2; color: #991b1b; padding: 1rem; border-radius: 6px; font-size: 0.85rem; overflow-x: auto; margin-top: 1rem; border: 1px solid #f87171; white-space: pre-wrap; font-family: monospace; line-height: 1.4; }
     </style>
 </head>
 <body>
@@ -62,6 +63,7 @@
     </div>
     
     <div id="statusText"></div>
+    <pre id="errorLog"></pre>
 
     <div id="dashboard">
         <div class="admin-controls">
@@ -95,6 +97,44 @@
     document.getElementById('connectBtn').addEventListener('click', loadRequests);
     document.getElementById('blockBtn').addEventListener('click', blockDomains);
 
+    // Helper function to display verbose errors
+    function displayVerboseError(shortMessage, errorObj) {
+        const statusText = document.getElementById('statusText');
+        const errorLog = document.getElementById('errorLog');
+        
+        statusText.textContent = `❌ ${shortMessage}`;
+        statusText.className = "text-error";
+        
+        errorLog.style.display = "block";
+        let detailedMsg = `=== VERBOSE ERROR LOG ===\n`;
+        detailedMsg += `Error Name: ${errorObj.name || 'Unknown'}\n`;
+        detailedMsg += `Message: ${errorObj.message}\n`;
+        if (errorObj.stack) {
+            detailedMsg += `\nStack Trace:\n${errorObj.stack}\n`;
+        }
+        
+        // Specific troubleshooting for common network/fetch errors
+        const msgLower = (errorObj.message || "").toLowerCase();
+        if (msgLower.includes('networkerror') || msgLower.includes('failed to fetch')) {
+            detailedMsg += `\n=== TROUBLESHOOTING NETWORK ERRORS ===\n`;
+            detailedMsg += `1. Check your URL: Ensure it is exactly correct and does not contain typos.\n`;
+            detailedMsg += `   Current Target: ${currentWorkerUrl}\n`;
+            detailedMsg += `2. CORS Issues: The browser may have blocked the request. Ensure your Cloudflare Worker includes 'Access-Control-Allow-Origin' headers in its response.\n`;
+            detailedMsg += `3. Deployment Status: Is the Cloudflare Worker fully deployed and active?\n`;
+            detailedMsg += `4. Open your browser's Developer Tools (Press F12), go to the "Network" or "Console" tab to see exactly why the request was rejected.`;
+        }
+        
+        errorLog.textContent = detailedMsg;
+    }
+
+    // Helper function to clear errors
+    function clearErrors() {
+        document.getElementById('statusText').textContent = "";
+        document.getElementById('statusText').className = "";
+        document.getElementById('errorLog').style.display = "none";
+        document.getElementById('errorLog').textContent = "";
+    }
+
     async function loadRequests() {
         const urlInput = document.getElementById('workerUrl').value.trim();
         const secretInput = document.getElementById('adminSecret').value.trim();
@@ -110,9 +150,9 @@
         currentWorkerUrl = urlInput.endsWith('/') ? urlInput.slice(0, -1) : urlInput;
         currentSecret = secretInput;
 
+        clearErrors();
         statusText.textContent = "Connecting...";
-        statusText.className = "";
-
+        
         try {
             const response = await fetch(`${currentWorkerUrl}/api/admin/requests`, {
                 method: 'GET',
@@ -125,21 +165,20 @@
             if (response.status === 401) {
                 throw new Error("Unauthorized: Incorrect Admin Secret");
             } else if (!response.ok) {
-                throw new Error(`Server Error: ${response.status}`);
+                throw new Error(`Server Error: Received HTTP Status ${response.status}`);
             }
 
             const requests = await response.json();
             
-            // Switch UI
-            document.getElementById('statusText').textContent = "";
+            // Switch UI on success
+            clearErrors();
             document.getElementById('dashboard').style.display = "block";
             
             renderTable(requests);
 
         } catch (error) {
             console.error(error);
-            statusText.textContent = `❌ Connection Failed: ${error.message}`;
-            statusText.className = "text-error";
+            displayVerboseError("Connection Failed.", error);
             document.getElementById('dashboard').style.display = "none";
         }
     }
@@ -202,10 +241,11 @@
                 alert(`Request ${action}d successfully!`);
                 loadRequests(); // Refresh the table
             } else {
-                throw new Error("Failed to resolve request.");
+                throw new Error(`Failed to resolve request. Server returned HTTP ${response.status}`);
             }
         } catch (error) {
-            alert(`Error: ${error.message}`);
+            console.error(error);
+            displayVerboseError(`Failed to ${action} request.`, error);
         }
     }
 
@@ -237,11 +277,14 @@
             if (response.ok) {
                 alert(`Successfully blocked ${domains.length} domain(s)!`);
                 document.getElementById('manualBlockInput').value = "";
+                // Optional: clear errors on success
+                clearErrors();
             } else {
-                throw new Error("Failed to block domains.");
+                throw new Error(`Failed to block domains. Server returned HTTP ${response.status}`);
             }
         } catch (error) {
-            alert(`Error: ${error.message}`);
+            console.error(error);
+            displayVerboseError("Failed to block domains.", error);
         } finally {
             blockBtn.disabled = false;
             blockBtn.textContent = "Block Domains";
