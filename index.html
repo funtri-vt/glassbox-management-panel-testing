@@ -12,10 +12,12 @@
         /* Login / Config Section */
         .config-panel { display: flex; gap: 1rem; margin-bottom: 2rem; background: #f9fafb; padding: 1.5rem; border-radius: 8px; border: 1px solid #e5e7eb; }
         .input-group { flex: 1; display: flex; flex-direction: column; gap: 0.5rem; }
-        input { padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; font-family: inherit; }
+        input, select { padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; font-family: inherit; box-sizing: border-box; }
         button { padding: 0.75rem 1.5rem; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
         .btn-primary { background-color: #2563eb; color: white; margin-top: auto; }
         .btn-primary:hover { background-color: #1d4ed8; }
+        .btn-secondary { background-color: #6b7280; color: white; }
+        .btn-secondary:hover { background-color: #4b5563; }
         
         /* Dashboard Section */
         #dashboard { display: none; }
@@ -36,7 +38,8 @@
         /* Admin Controls Block Panel */
         .admin-controls { background: #f9fafb; padding: 1.5rem; border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 2rem; }
         .admin-controls h3 { margin-top: 0; margin-bottom: 0.5rem; font-size: 1.1rem; color: #111827; }
-        .admin-controls textarea { width: 100%; margin-top: 0.5rem; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; font-family: monospace; resize: vertical; box-sizing: border-box;}
+        .block-table th, .block-table td { padding: 0.5rem; border-bottom: none; }
+        .block-table th { background-color: transparent; border-bottom: 1px solid #d1d5db; }
         
         /* Status Text & Logging */
         #statusText { margin-top: 1rem; font-weight: bold; }
@@ -68,9 +71,25 @@
     <div id="dashboard">
         <div class="admin-controls">
             <h3>🚫 Manually Block Domains</h3>
-            <p style="font-size: 0.85rem; color: #6b7280; margin-top: 0;">Enter domains to block, one per line (e.g., distracting-site.com).</p>
-            <textarea id="manualBlockInput" rows="4" placeholder="badsite.com&#10;anotherbadsite.net"></textarea>
-            <button class="btn-deny" id="blockBtn" style="margin-top: 0.5rem;">Block Domains</button>
+            <p style="font-size: 0.85rem; color: #6b7280; margin-top: 0;">Specify targets to block. Choose "Domain" to wildcard subdomains, or "Path" for specific URLs.</p>
+            
+            <table class="block-table" style="width: 100%; margin-top: 0.5rem;">
+                <thead>
+                    <tr>
+                        <th style="width: 60%;">Target (e.g., badsite.com or badsite.com/games)</th>
+                        <th style="width: 30%;">Match Type</th>
+                        <th style="width: 10%; text-align: center;">Remove</th>
+                    </tr>
+                </thead>
+                <tbody id="blockTableBody">
+                    <!-- Rows injected via JS -->
+                </tbody>
+            </table>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem;">
+                <button type="button" class="btn-secondary" id="addRowBtn" style="padding: 0.5rem 1rem;">+ Add Row</button>
+                <button type="button" class="btn-deny" id="blockBtn">Block All Entries</button>
+            </div>
         </div>
 
         <h2>Pending Unblock Requests</h2>
@@ -96,6 +115,34 @@
 
     document.getElementById('connectBtn').addEventListener('click', loadRequests);
     document.getElementById('blockBtn').addEventListener('click', blockDomains);
+    document.getElementById('addRowBtn').addEventListener('click', () => addBlockRow());
+
+    // Initialize with one empty row
+    document.addEventListener('DOMContentLoaded', () => {
+        addBlockRow();
+    });
+
+    // Helper to add a dynamic row to the manual block table
+    function addBlockRow(defaultTarget = '', defaultType = 'domain') {
+        const tbody = document.getElementById('blockTableBody');
+        const tr = document.createElement('tr');
+        
+        tr.innerHTML = `
+            <td>
+                <input type="text" class="block-target" placeholder="badsite.com" value="${defaultTarget}" style="width: 100%; margin: 0;" required>
+            </td>
+            <td>
+                <select class="block-type" style="width: 100%; margin: 0;">
+                    <option value="domain" ${defaultType === 'domain' ? 'selected' : ''}>Domain (Wildcard)</option>
+                    <option value="path" ${defaultType === 'path' ? 'selected' : ''}>Exact Path</option>
+                </select>
+            </td>
+            <td style="text-align: center;">
+                <button type="button" class="btn-deny" onclick="this.closest('tr').remove()" style="padding: 0.5rem 0.75rem; margin: 0;">X</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    }
 
     // Helper function to display verbose errors
     function displayVerboseError(shortMessage, errorObj) {
@@ -213,14 +260,14 @@
     async function resolveRequest(requestId, action, fullUrl) {
         if (!confirm(`Are you sure you want to ${action} this request?`)) return;
 
-        // Extract just the domain name for the DNR rule engine
-        let domain = fullUrl;
+        // Extract just the domain name for the DNR rule engine by default
+        let target = fullUrl;
         try {
             // Add https:// if student forgot it so URL parser works
             const parsedUrl = new URL(fullUrl.startsWith('http') ? fullUrl : `https://${fullUrl}`);
-            domain = parsedUrl.hostname;
+            target = parsedUrl.hostname;
         } catch (e) {
-            console.warn("Could not parse URL, using raw input as domain.");
+            console.warn("Could not parse URL, using raw input as target.");
         }
 
         try {
@@ -233,7 +280,8 @@
                 body: JSON.stringify({
                     requestId: requestId,
                     action: action,
-                    domain: domain
+                    target: target,
+                    matchType: 'domain' // Automatically unblock the domain when approving
                 })
             });
 
@@ -250,15 +298,25 @@
     }
 
     async function blockDomains() {
-        const input = document.getElementById('manualBlockInput').value;
-        const domains = input.split('\n').map(d => d.trim()).filter(d => d.length > 0);
+        const rows = document.querySelectorAll('#blockTableBody tr');
+        const blocks = [];
 
-        if (domains.length === 0) {
-            alert("Please enter at least one domain to block.");
+        // Scrape data from the dynamic table
+        rows.forEach(row => {
+            const target = row.querySelector('.block-target').value.trim();
+            const matchType = row.querySelector('.block-type').value;
+            
+            if (target) {
+                blocks.push({ target: target, matchType: matchType });
+            }
+        });
+
+        if (blocks.length === 0) {
+            alert("Please enter at least one target to block.");
             return;
         }
 
-        if (!confirm(`Are you sure you want to block ${domains.length} domain(s)?`)) return;
+        if (!confirm(`Are you sure you want to block ${blocks.length} entry/entries?`)) return;
 
         const blockBtn = document.getElementById('blockBtn');
         blockBtn.disabled = true;
@@ -271,23 +329,24 @@
                     'Authorization': `Bearer ${currentSecret}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ domains: domains })
+                body: JSON.stringify({ blocks: blocks })
             });
 
             if (response.ok) {
-                alert(`Successfully blocked ${domains.length} domain(s)!`);
-                document.getElementById('manualBlockInput').value = "";
-                // Optional: clear errors on success
+                alert(`Successfully blocked ${blocks.length} entry/entries!`);
+                // Clear the table and leave one fresh row
+                document.getElementById('blockTableBody').innerHTML = '';
+                addBlockRow();
                 clearErrors();
             } else {
-                throw new Error(`Failed to block domains. Server returned HTTP ${response.status}`);
+                throw new Error(`Failed to block entries. Server returned HTTP ${response.status}`);
             }
         } catch (error) {
             console.error(error);
-            displayVerboseError("Failed to block domains.", error);
+            displayVerboseError("Failed to block entries.", error);
         } finally {
             blockBtn.disabled = false;
-            blockBtn.textContent = "Block Domains";
+            blockBtn.textContent = "Block All Entries";
         }
     }
 </script>
