@@ -307,7 +307,7 @@
         <div id="tab-filter" class="tab-content active">
             <div class="admin-controls">
                 <h3>🚫 Manually Block Domains</h3>
-                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">Specify targets to block. Choose "Domain" to wildcard subdomains, "Path" for specific URLs, or "Regex" for advanced patterns.</p>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">Specify targets to block. Choose "Domain" to wildcard subdomains, or "Path" for specific URLs. <strong style="color: var(--danger);">*Note: Regex blocking is currently non-functional due to Chrome engine limitations. Please use Domain/Path, or apply Regex rules via Google Admin Workspace.*</strong></p>
                 
                 <table class="block-table" style="width: 100%; margin-top: 0.5rem;">
                     <thead>
@@ -450,7 +450,7 @@
                 <select class="block-type" style="width: 100%; margin: 0;">
                     <option value="domain" ${defaultType === 'domain' ? 'selected' : ''}>Domain (Wildcard)</option>
                     <option value="path" ${defaultType === 'path' ? 'selected' : ''}>Exact Path</option>
-                    <option value="regex" ${defaultType === 'regex' ? 'selected' : ''}>Regex (Advanced)</option>
+                    <option value="regex" ${defaultType === 'regex' ? 'selected' : ''}>Regex (Currently Unavailable)</option>
                 </select>
             </td>
             <td style="text-align: center;">
