@@ -362,6 +362,15 @@
                             <option value="all">All Time</option>
                         </select>
                     </div>
+                    <!-- NEW: Traffic Status Filter -->
+                    <div class="filter-item">
+                        <label>Traffic Type</label>
+                        <select id="filterStatus">
+                            <option value="all" selected>All Traffic</option>
+                            <option value="unapproved">Shadow IT (Unapproved Only)</option>
+                            <option value="approved">Approved Apps Only</option>
+                        </select>
+                    </div>
                     <div class="filter-item">
                         <label>Display Limit</label>
                         <input type="number" id="filterLimit" value="50" min="5" max="200">
@@ -375,7 +384,7 @@
                         <input type="number" id="filterMinMins" value="0" min="0">
                     </div>
                     <div class="filter-item" style="flex: auto; justify-content: flex-end;">
-                        <button class="btn-primary" onclick="loadInsights()" style="width: 100%;">Apply Filters & Refresh</button>
+                        <button class="btn-primary" onclick="refreshInsightsTab()" style="width: 100%;">Apply Filters & Refresh</button>
                     </div>
                 </div>
                 
@@ -393,7 +402,7 @@
                         <h3>🚦 Live URL Traffic (Audit Log)</h3>
                         <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">Monitor exact URLs visited to uncover hit-and-run shadow IT.</p>
                     </div>
-                    <button class="btn-secondary" onclick="loadLiveTraffic()" style="padding: 0.5rem 1rem; font-size: 0.85rem;">🔄 Refresh</button>
+                    <button class="btn-secondary" onclick="refreshInsightsTab()" style="padding: 0.5rem 1rem; font-size: 0.85rem;">🔄 Refresh</button>
                 </div>
                 
                 <table style="margin-top: 1rem;">
@@ -543,8 +552,7 @@
             
             // If auth is successful, show dashboard and fetch Insights data
             document.getElementById('dashboard').style.display = "block";
-            loadInsights(); 
-            loadLiveTraffic();
+            refreshInsightsTab(); 
             loadApprovedApps();
 
         } catch (error) {
@@ -710,6 +718,11 @@
     // INSIGHTS & ROI MANAGEMENT
     // ==========================================
 
+    function refreshInsightsTab() {
+        loadInsights();
+        loadLiveTraffic();
+    }
+
     async function loadInsights() {
         const chartContainer = document.getElementById('chartContainer');
         const noDataMsg = document.getElementById('noDataMessage');
@@ -719,11 +732,13 @@
         const limit = document.getElementById('filterLimit').value;
         const hash = document.getElementById('filterHash').value.trim();
         const minMins = document.getElementById('filterMinMins').value;
+        const statusFilter = document.getElementById('filterStatus').value;
         
         // Construct the query string safely
         const params = new URLSearchParams({ timeframe, limit });
         if (minMins) params.append('minMinutes', minMins);
         if (hash) params.append('studentHash', hash);
+        if (statusFilter !== 'all') params.append('statusFilter', statusFilter);
 
         try {
             const response = await fetch(`${currentWorkerUrl}/api/admin/insight/reports?${params.toString()}`, {
@@ -822,8 +837,14 @@
         const tbody = document.getElementById('liveTrafficTableBody');
         tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading traffic data...</td></tr>`;
 
+        const timeframe = document.getElementById('filterTimeframe').value;
+        const statusFilter = document.getElementById('filterStatus').value;
+        const params = new URLSearchParams({ limit: 50 });
+        if (timeframe) params.append('timeframe', timeframe);
+        if (statusFilter !== 'all') params.append('statusFilter', statusFilter);
+
         try {
-            const response = await fetch(`${currentWorkerUrl}/api/admin/insight/traffic?limit=50`, {
+            const response = await fetch(`${currentWorkerUrl}/api/admin/insight/traffic?${params.toString()}`, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${currentSecret}`,
