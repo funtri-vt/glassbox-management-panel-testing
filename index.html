@@ -811,7 +811,7 @@
 
         try {
             // 1. Register the Service Worker
-            const registration = await navigator.serviceWorker.register('/sw.js');
+            const registration = await navigator.serviceWorker.register(new URL('sw.js', window.location.href).href);
             
             // Wait for the service worker to become active so we can send it a message
             let sw = registration.active || registration.waiting || registration.installing;
