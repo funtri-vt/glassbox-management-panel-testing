@@ -3,6 +3,8 @@
 // Handles background push notifications and quick actions
 // ==========================================
 
+const DEBUG_MODE = true; // 🎯 Set to false to disable diagnostic log popups
+
 // 1. Minimal IndexedDB wrapper to securely store credentials across browser restarts
 function getDb() {
     return new Promise((resolve, reject) => {
@@ -62,7 +64,12 @@ self.addEventListener('notificationclick', function(event) {
     event.notification.close(); // Instantly close the popup
 
     const clickedAction = event.action;
-    const data = event.notification.data;
+    const data = event.notification.data || {};
+
+    // --- START DIAGNOSTIC LOG ---
+    let dbgOutput = `--- GLASSBOX SW DIAGNOSTICS ---\n`;
+    dbgOutput += `1. Raw Action: "${clickedAction}"\n`;
+    dbgOutput += `2. Raw Data: ${JSON.stringify(data)}\n`;
 
     // If they just clicked the body of the notification, open the dashboard
     if (!clickedAction) {
@@ -70,8 +77,8 @@ self.addEventListener('notificationclick', function(event) {
         return;
     }
 
-    // 🎯 FIX 1: Normalize the action to lowercase to prevent OS-level capitalization bugs
-    const normalizedAction = clickedAction.toLowerCase();
+    const normalizedAction = clickedAction.toLowerCase().trim();
+    dbgOutput += `3. Normalized Action: "${normalizedAction}"\n`;
 
     // If they clicked Approve or Deny, fire off the API request!
     if (normalizedAction === 'approve' || normalizedAction === 'deny') {
@@ -80,8 +87,11 @@ self.addEventListener('notificationclick', function(event) {
                 const workerUrl = await getConfig('workerUrl');
                 const adminSecret = await getConfig('adminSecret');
 
+                dbgOutput += `4. Auth Loaded: URL=${!!workerUrl}, Secret=${!!adminSecret}\n`;
+
                 if (!workerUrl || !adminSecret) {
-                    console.error("Missing credentials in SW. Cannot perform quick action.");
+                    dbgOutput += `❌ ERROR: Missing credentials in IndexedDB.\n`;
+                    if (DEBUG_MODE) await openDebugLog(dbgOutput);
                     return;
                 }
 
@@ -89,7 +99,7 @@ self.addEventListener('notificationclick', function(event) {
                 let finalMatchType = data.matchType || 'domain';
 
                 try {
-                    let cleanUrl = data.url.replace(/^https?:\/\//, '').replace(/^www\./, '');
+                    let cleanUrl = (data.url || '').replace(/^https?:\/\//, '').replace(/^www\./, '');
                     if (cleanUrl.includes('/') && cleanUrl.split('/')[1] !== '') {
                         finalTarget = cleanUrl;
                         finalMatchType = 'path';
@@ -98,36 +108,66 @@ self.addEventListener('notificationclick', function(event) {
                         finalMatchType = 'domain';
                     }
                 } catch (e) {
-                    console.warn("Could not parse URL intelligently, using raw input.");
+                    dbgOutput += `⚠️ URL parse warning.\n`;
                 }
 
-                // 🎯 FIX 2: Ensure the worker URL never has a trailing slash before appending our path
                 const cleanWorkerUrl = workerUrl.endsWith('/') ? workerUrl.slice(0, -1) : workerUrl;
+                
+                const payload = {
+                    requestId: data.requestId,
+                    action: normalizedAction,
+                    target: finalTarget,
+                    matchType: finalMatchType
+                };
+                
+                dbgOutput += `5. Payload: ${JSON.stringify(payload)}\n`;
+                dbgOutput += `6. Sending POST to: ${cleanWorkerUrl}/api/admin/filter/resolve\n`;
 
-                console.log(`[SW] Firing ${normalizedAction} for request ID: ${data.requestId}`);
-
-                // Fire the exact same POST request the dashboard uses
                 const response = await fetch(`${cleanWorkerUrl}/api/admin/filter/resolve`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${adminSecret}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        requestId: data.requestId,
-                        action: normalizedAction,
-                        target: finalTarget,
-                        matchType: finalMatchType
-                    })
+                    body: JSON.stringify(payload)
                 });
                 
-                // 🎯 FIX 3: Log the exact server response to the SW console for debugging
                 const responseText = await response.text();
-                console.log(`[SW] Server responded: ${response.status} - ${responseText}`);
+                dbgOutput += `7. Server Status: ${response.status}\n`;
+                dbgOutput += `8. Server Response: ${responseText}\n`;
+                
+                if (DEBUG_MODE) await openDebugLog(dbgOutput);
                 
             } catch (err) {
-                console.error("Quick Action failed:", err);
+                dbgOutput += `❌ CRITICAL EXCEPTION: ${err.message}\n`;
+                if (DEBUG_MODE) await openDebugLog(dbgOutput);
             }
         })());
+    } else {
+        dbgOutput += `❌ ERROR: Action did not match 'approve' or 'deny'.\n`;
+        if (DEBUG_MODE) event.waitUntil(openDebugLog(dbgOutput));
     }
 });
+
+// Helper function to generate an on-the-fly debug tab
+async function openDebugLog(logText) {
+    const html = `
+        <html>
+        <head>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>SW Debug Log</title>
+            <style>
+                body { font-family: monospace; padding: 1rem; background: #1e1e1e; color: #00ff00; }
+                h2 { color: #fff; font-family: sans-serif; margin-top: 0; }
+                pre { white-space: pre-wrap; word-break: break-all; font-size: 14px; line-height: 1.5; }
+            </style>
+        </head>
+        <body>
+            <h2>📡 Glassbox SW Log</h2>
+            <pre>${logText}</pre>
+        </body>
+        </html>
+    `;
+    const dataUri = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
+    return clients.openWindow(dataUri);
+}
