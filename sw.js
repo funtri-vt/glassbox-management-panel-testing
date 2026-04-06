@@ -50,9 +50,9 @@ self.addEventListener('push', function(event) {
         badge: 'https://cdn-icons-png.flaticon.com/512/2040/2040504.png',
         data: data, // Stores the requestId and target for the button clicks
         actions: [
-            // 🎯 FIX 1: Use highly custom IDs so the OS doesn't hijack the string
-            { action: 'glassbox-action-approve', title: '✅ Approve' },
-            { action: 'glassbox-action-deny', title: '❌ Deny' }
+            // 🎯 FIX 1: Use ultra-short, non-standard IDs to prevent OS index swapping
+            { action: 'action_yes', title: '✅ Approve' },
+            { action: 'action_no', title: '❌ Deny' }
         ],
         requireInteraction: true // Keeps the notification open until clicked
     };
@@ -81,11 +81,11 @@ self.addEventListener('notificationclick', function(event) {
     const normalizedAction = clickedAction.toLowerCase().trim();
     dbgOutput += `3. Normalized Action: "${normalizedAction}"\n`;
 
-    // 🎯 FIX 2: Translate the custom ID back to the standard API action
+    // 🎯 FIX 2: Translate the new ultra-short IDs back to the API standard
     let apiAction = null;
-    if (normalizedAction === 'glassbox-action-approve' || normalizedAction === 'approve') {
+    if (normalizedAction === 'action_yes' || normalizedAction === 'approve') {
         apiAction = 'approve';
-    } else if (normalizedAction === 'glassbox-action-deny' || normalizedAction === 'deny') {
+    } else if (normalizedAction === 'action_no' || normalizedAction === 'deny') {
         apiAction = 'deny';
     }
 
@@ -125,7 +125,7 @@ self.addEventListener('notificationclick', function(event) {
                 
                 const payload = {
                     requestId: data.requestId,
-                    action: apiAction, // 🎯 Use the translated action!
+                    action: apiAction, 
                     target: finalTarget,
                     matchType: finalMatchType
                 };
