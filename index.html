@@ -490,17 +490,20 @@
         <div id="tab-insights" class="tab-content">
             <div class="admin-controls">
                 <h3>📈 Application Usage & ROI Tracking</h3>
-                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">Visualize time spent across tracked applications based on dynamic filters.</p>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0; margin-bottom: 1rem;">
+                    Visualize time spent across tracked applications based on dynamic filters. 
+                    <strong style="color: var(--primary);">Note:</strong> Queries beyond 7 days fetch aggregated midnight rollups and will not include today's live active traffic.
+                </p>
                 
                 <!-- Advanced Chart Filters -->
                 <div class="filter-bar">
                     <div class="filter-item">
                         <label>Timeframe</label>
                         <select id="filterTimeframe">
-                            <option value="7">Last 7 Days</option>
-                            <option value="30" selected>Last 30 Days</option>
-                            <option value="90">Last 90 Days</option>
-                            <option value="all">All Time</option>
+                            <option value="7">Last 7 Days (Includes Today)</option>
+                            <option value="30" selected>Last 30 Days (Historical)</option>
+                            <option value="90">Last 90 Days (Historical)</option>
+                            <option value="all">All Time (Historical)</option>
                         </select>
                     </div>
                     <!-- NEW: Traffic Status Filter -->
