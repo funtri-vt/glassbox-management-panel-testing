@@ -536,6 +536,45 @@
     let outliersData = [], currentOutliersPage = 1;
     let trafficData = [], currentTrafficPage = 1;
     const analyticsPageLimit = 10;
+    const SESSION_TIMEOUT_MS = 60 * 60 * 1000; // 1 hour in milliseconds
+
+    // ==========================================
+    // 🔒 SESSION MANAGEMENT HELPERS
+    // ==========================================
+    function updateSessionActivity() {
+        const sessionData = sessionStorage.getItem('glassbox_session');
+        if (sessionData) {
+            const session = JSON.parse(sessionData);
+            session.lastActive = Date.now();
+            sessionStorage.setItem('glassbox_session', JSON.stringify(session));
+        }
+    }
+
+    // ==========================================
+    // 🛡️ SECURITY: XSS SANITIZATION HELPERS
+    // ==========================================
+    function escapeHTML(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function escapeJS(str) {
+        if (str === null || str === undefined) return '';
+        // Safely slash-escapes characters to prevent breaking out of single-quoted JS strings in HTML attributes
+        return String(str)
+            .replace(/\\/g, '\\\\')
+            .replace(/'/g, '\\\'')
+            .replace(/"/g, '\\"')
+            .replace(/\n/g, '\\n')
+            .replace(/\r/g, '\\r')
+            .replace(/</g, '\\x3c')
+            .replace(/>/g, '\\x3e');
+    }
 
     document.getElementById('loginBtn').addEventListener('click', handleLogin);
     document.getElementById('blockBtn').addEventListener('click', blockDomains);
@@ -543,6 +582,37 @@
 
     document.addEventListener('DOMContentLoaded', async () => {
         addBlockRow();
+
+        // Check for an existing valid session before showing the login screen
+        const sessionData = sessionStorage.getItem('glassbox_session');
+        if (sessionData) {
+            const session = JSON.parse(sessionData);
+            if (Date.now() - session.lastActive > SESSION_TIMEOUT_MS) {
+                // Session is older than 1 hour - clear it out
+                sessionStorage.removeItem('glassbox_session');
+            } else {
+                // Restore active session
+                currentWorkerUrl = session.workerUrl;
+                currentSecret = session.token;
+                currentUserRole = session.role;
+                updateSessionActivity();
+
+                document.getElementById('loginPanel').style.display = "none";
+                document.getElementById('logoutBtn').style.display = "block";
+                document.getElementById('dashboard').style.display = "block";
+
+                await loadRequests();
+                loadActiveFilters(); 
+                refreshInsightsTab(); 
+                loadApprovedApps();
+                loadStaff();
+                loadClassrooms();
+                
+                checkPushStatus(); 
+                return; // Exit early so we don't try to fetch config.json unnecessarily
+            }
+        }
+
         try {
             const configRes = await fetch('config.json');
             if (configRes.ok) {
@@ -557,6 +627,7 @@
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.getElementById(`tab-${tabId}`).classList.add('active');
         btnElement.classList.add('active');
+        updateSessionActivity();
     }
 
     function displayVerboseError(shortMessage, errorObj) {
@@ -623,6 +694,14 @@
             currentSecret = data.token;
             currentUserRole = data.role;
             
+            // Save successful login state to sessionStorage
+            sessionStorage.setItem('glassbox_session', JSON.stringify({
+                token: currentSecret,
+                role: data.role,
+                workerUrl: currentWorkerUrl,
+                lastActive: Date.now()
+            }));
+            
             document.getElementById('loginPanel').style.display = "none";
             document.getElementById('logoutBtn').style.display = "block";
             document.getElementById('dashboard').style.display = "block";
@@ -653,6 +732,9 @@
                 headers: { 'Authorization': `Bearer ${currentSecret}` }
             });
         } catch (e) {} 
+        
+        // Wipe local session storage
+        sessionStorage.removeItem('glassbox_session');
         location.reload();
     }
 
@@ -660,6 +742,7 @@
     // STAFF & CLASSROOM MANAGEMENT
     // ---------------------------------------------------------
     async function loadStaff() {
+        updateSessionActivity();
         try {
             const res = await fetch(`${currentWorkerUrl}/api/admin/users`, {
                 headers: { 'Authorization': `Bearer ${currentSecret}` }
@@ -675,10 +758,13 @@
 
             data.users.forEach(u => {
                 const lastActive = u.last_active_at ? new Date(u.last_active_at).toLocaleString() : 'Never';
+                const safeUsername = escapeHTML(u.username);
+                const safeRole = escapeHTML(u.role.replace('_', ' '));
+
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td><strong>${u.username}</strong></td>
-                    <td style="text-transform: capitalize;">${u.role.replace('_', ' ')}</td>
+                    <td><strong>${safeUsername}</strong></td>
+                    <td style="text-transform: capitalize;">${safeRole}</td>
                     <td style="font-size: 0.85rem;">${lastActive}</td>
                     <td class="actions">
                         <button class="btn-secondary" onclick="resetStaffPassword(${u.id})" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">Reset Pass</button>
@@ -687,7 +773,7 @@
                 `;
                 tbody.appendChild(tr);
 
-                // 🎯 FIX: Populate the Classroom Creation dropdown with valid teachers
+                // Populate the Classroom Creation dropdown with valid teachers
                 if (u.role === 'teacher') {
                     const opt = document.createElement('option');
                     opt.value = u.id;
@@ -749,6 +835,7 @@
 
     // --- Classrooms ---
     async function loadClassrooms() {
+        updateSessionActivity();
         try {
             const res = await fetch(`${currentWorkerUrl}/api/admin/classrooms`, {
                 headers: { 'Authorization': `Bearer ${currentSecret}` }
@@ -768,10 +855,13 @@
             }
 
             data.classrooms.forEach(c => {
+                const safeName = escapeHTML(c.name);
+                const safeTeacher = escapeHTML(c.teacher_username || 'Unknown Teacher');
+
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td><strong>${c.name}</strong></td>
-                    <td>${c.teacher_username || 'Unknown Teacher'}</td>
+                    <td><strong>${safeName}</strong></td>
+                    <td>${safeTeacher}</td>
                     <td>
                         <button class="btn-deny" onclick="deleteClassroom(${c.id})" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">Delete</button>
                     </td>
@@ -856,8 +946,11 @@
     function addBlockRow(defaultTarget = '', defaultType = 'domain') {
         const tbody = document.getElementById('blockTableBody');
         const tr = document.createElement('tr');
+        
+        const safeTarget = escapeHTML(defaultTarget);
+        
         tr.innerHTML = `
-            <td><input type="text" class="block-target" placeholder="badsite.com or ^https:\/\/.*" value="${defaultTarget}" style="width: 100%; margin: 0;" required></td>
+            <td><input type="text" class="block-target" placeholder="badsite.com or ^https:\/\/.*" value="${safeTarget}" style="width: 100%; margin: 0;" required></td>
             <td>
                 <select class="block-type" style="width: 100%; margin: 0;">
                     <option value="domain" ${defaultType === 'domain' ? 'selected' : ''}>Domain (Wildcard)</option>
@@ -905,6 +998,7 @@
     }
 
     async function loadRequests() {
+        updateSessionActivity();
         const tbody = document.getElementById('requestsTableBody');
         tbody.innerHTML = `<tr><td colspan="5" class="loading-row"><div class="loading-content"><div class="spinner"></div><span>Loading requests...</span></div></td></tr>`;
         
@@ -925,11 +1019,17 @@
             requests.forEach(req => {
                 const date = new Date(req.created_at).toLocaleString();
                 const tr = document.createElement('tr');
+                
+                const safeHash = escapeHTML(req.student_hash.substring(0, 16));
+                const safeUrl = escapeHTML(req.url);
+                const safeReason = escapeHTML(req.reason);
+                const jsSafeUrl = escapeJS(req.url);
+
                 tr.innerHTML = `
                     <td>${date}</td>
-                    <td class="hash-cell">${req.student_hash.substring(0, 16)}...</td>
-                    <td><strong>${req.url}</strong></td>
-                    <td class="reason-cell">${req.reason}</td>
+                    <td class="hash-cell">${safeHash}...</td>
+                    <td><strong>${safeUrl}</strong></td>
+                    <td class="reason-cell">${safeReason}</td>
                     <td class="actions" style="flex-direction: column; align-items: flex-start;">
                         <select id="duration-${req.id}" style="padding: 0.4rem; font-size: 0.8rem; margin-bottom: 0.5rem; width: 100%;">
                             <option value="0">Permanent</option>
@@ -937,8 +1037,8 @@
                             <option value="24">24 Hours</option>
                         </select>
                         <div style="display: flex; gap: 0.5rem;">
-                            <button class="btn-approve" onclick="resolveRequest(${req.id}, 'approve', '${req.url}')">Approve</button>
-                            <button class="btn-deny" onclick="resolveRequest(${req.id}, 'deny', '${req.url}')">Deny</button>
+                            <button class="btn-approve" onclick="resolveRequest(${req.id}, 'approve', '${jsSafeUrl}')">Approve</button>
+                            <button class="btn-deny" onclick="resolveRequest(${req.id}, 'deny', '${jsSafeUrl}')">Deny</button>
                         </div>
                     </td>
                 `;
@@ -975,6 +1075,7 @@
     }
 
     async function loadActiveFilters(page = currentFilterPage) {
+        updateSessionActivity();
         currentFilterPage = page;
         const tbody = document.getElementById('activeRulesTableBody');
         tbody.innerHTML = `<tr><td colspan="5" class="loading-row"><div class="spinner"></div></td></tr>`;
@@ -999,7 +1100,8 @@
             document.getElementById('btnNextRules').disabled = currentFilterPage >= totalFilterPages;
 
             data.rules.forEach(rule => {
-                const actionBadge = `<span style="background: ${rule.action === 'block' ? 'var(--danger)' : 'var(--success)'}; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold; text-transform: uppercase;">${rule.action}</span>`;
+                const safeAction = escapeHTML(rule.action);
+                const actionBadge = `<span style="background: ${rule.action === 'block' ? 'var(--danger)' : 'var(--success)'}; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold; text-transform: uppercase;">${safeAction}</span>`;
                 
                 let expiresText = '<span style="color: var(--text-muted);">Permanent</span>';
                 if (rule.expires_at) {
@@ -1011,13 +1113,17 @@
                     }
                 }
 
+                const safeTarget = escapeHTML(rule.target);
+                const safeMatchType = escapeHTML(rule.match_type);
+                const jsSafeTarget = escapeJS(rule.target);
+
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td style="font-family: monospace; font-size: 0.9rem;">${rule.target}</td>
-                    <td style="text-transform: capitalize;">${rule.match_type}</td>
+                    <td style="font-family: monospace; font-size: 0.9rem;">${safeTarget}</td>
+                    <td style="text-transform: capitalize;">${safeMatchType}</td>
                     <td>${actionBadge}</td>
                     <td style="font-size: 0.85rem;">${expiresText}</td>
-                    <td style="text-align: center;"><button class="btn-deny" onclick="removeActiveRule(${rule.id}, '${rule.target}')" style="padding: 0.4rem 0.6rem;">Remove</button></td>
+                    <td style="text-align: center;"><button class="btn-deny" onclick="removeActiveRule(${rule.id}, '${jsSafeTarget}')" style="padding: 0.4rem 0.6rem;">Remove</button></td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -1046,6 +1152,7 @@
     // INSIGHTS & ROI
     // ---------------------------------------------------------
     function refreshInsightsTab() {
+        updateSessionActivity();
         loadInsights();
         loadLiveTraffic();
         loadOutliers();
@@ -1096,8 +1203,10 @@
             const isOutlier = avg > 60;
             const flame = isOutlier ? '<span title="High average!" style="color: var(--danger); margin-left: 0.5rem;">🔥</span>' : '';
             
+            const safeTarget = escapeHTML(r.target);
+
             const tr = document.createElement('tr');
-            tr.innerHTML = `<td><strong>${r.target}</strong></td><td>${r.total_minutes}</td><td>${r.unique_students}</td><td>${avg} min ${flame}</td>`;
+            tr.innerHTML = `<td><strong>${safeTarget}</strong></td><td>${r.total_minutes}</td><td>${r.unique_students}</td><td>${avg} min ${flame}</td>`;
             tbody.appendChild(tr);
         });
 
@@ -1127,6 +1236,7 @@
     }
 
     async function loadOutliers() {
+        updateSessionActivity();
         const tbody = document.getElementById('outliersTableBody');
         tbody.innerHTML = `<tr><td colspan="4" class="loading-row"><div class="spinner"></div></td></tr>`;
         try {
@@ -1152,13 +1262,21 @@
         
         outliersData.slice((page - 1) * analyticsPageLimit, page * analyticsPageLimit).forEach(row => {
             const tr = document.createElement('tr');
+            const domain = row.target.split('/')[0];
+            
+            const safeHashShort = escapeHTML(row.student_hash.substring(0, 16));
+            const safeHashFull = escapeHTML(row.student_hash);
+            const safeTarget = escapeHTML(row.target);
+            const jsSafeTarget = escapeJS(row.target);
+            const jsSafeDomain = escapeJS(domain);
+
             tr.innerHTML = `
-                <td class="hash-cell">${row.student_hash.substring(0, 16)}...</td>
-                <td style="font-family: monospace; font-size: 0.85rem;">${row.target}</td>
+                <td class="hash-cell" title="${safeHashFull}">${safeHashShort}...</td>
+                <td style="font-family: monospace; font-size: 0.85rem;">${safeTarget}</td>
                 <td style="color: var(--danger); font-weight: bold;">${row.total_minutes} min</td>
                 <td class="actions">
-                    <button class="btn-deny" onclick="quickBlock('${row.target}', 'path')">Block Path</button>
-                    <button class="btn-deny" onclick="quickBlock('${row.target.split('/')[0]}', 'domain')" style="background-color: var(--secondary);">Block Domain</button>
+                    <button class="btn-deny" onclick="quickBlock('${jsSafeTarget}', 'path')">Block Path</button>
+                    <button class="btn-deny" onclick="quickBlock('${jsSafeDomain}', 'domain')" style="background-color: var(--secondary);">Block Domain</button>
                 </td>
             `;
             tbody.appendChild(tr);
@@ -1174,6 +1292,7 @@
     }
 
     async function loadLiveTraffic() {
+        updateSessionActivity();
         const tbody = document.getElementById('liveTrafficTableBody');
         tbody.innerHTML = `<tr><td colspan="4" class="loading-row"><div class="spinner"></div></td></tr>`;
         try {
@@ -1198,13 +1317,24 @@
         
         trafficData.slice((page - 1) * analyticsPageLimit, page * analyticsPageLimit).forEach(row => {
             const tr = document.createElement('tr');
+            
             const badgeColor = row.status === 'approved' ? 'var(--success)' : 'var(--danger)';
+            const safeStatus = escapeHTML(row.status.toUpperCase());
+            const statusBadge = `<span style="background: ${badgeColor}; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold;">${safeStatus}</span>`;
+            
+            const domain = row.target.split('/')[0];
+            
+            const safeTarget = escapeHTML(row.target);
+            const jsSafeTarget = escapeJS(row.target);
+            const jsSafeDomain = escapeJS(domain);
+
             tr.innerHTML = `
-                <td style="font-family: monospace; font-size: 0.85rem;">${row.target}</td>
-                <td><span style="background: ${badgeColor}; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold;">${row.status.toUpperCase()}</span></td>
+                <td style="font-family: monospace; font-size: 0.85rem;">${safeTarget}</td>
+                <td>${statusBadge}</td>
                 <td><strong>${row.hits}</strong></td>
                 <td class="actions">
-                    <button class="btn-deny" onclick="quickBlock('${row.target}', 'path')">Block Path</button>
+                    <button class="btn-deny" onclick="quickBlock('${jsSafeTarget}', 'path')">Block Path</button>
+                    <button class="btn-deny" onclick="quickBlock('${jsSafeDomain}', 'domain')" style="background-color: var(--secondary);">Block Domain</button>
                 </td>
             `;
             tbody.appendChild(tr);
@@ -1232,6 +1362,7 @@
     }
 
     async function loadApprovedApps() {
+        updateSessionActivity();
         const tbody = document.getElementById('approvedAppsTableBody');
         tbody.innerHTML = `<tr><td colspan="4" class="loading-row"><div class="spinner"></div></td></tr>`;
         try {
@@ -1245,7 +1376,12 @@
             }
             data.apps.forEach(app => {
                 const tr = document.createElement('tr');
-                tr.innerHTML = `<td><strong>${app.domain}</strong></td><td>${app.app_name}</td><td><span style="background: var(--border-color); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem;">${app.category || 'General'}</span></td><td><button class="btn-deny" onclick="removeApprovedApp(${app.id})">Remove</button></td>`;
+                
+                const safeDomain = escapeHTML(app.domain);
+                const safeAppName = escapeHTML(app.app_name);
+                const safeCategory = escapeHTML(app.category || 'General');
+
+                tr.innerHTML = `<td><strong>${safeDomain}</strong></td><td>${safeAppName}</td><td><span style="background: var(--border-color); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem;">${safeCategory}</span></td><td><button class="btn-deny" onclick="removeApprovedApp(${app.id})">Remove</button></td>`;
                 tbody.appendChild(tr);
             });
         } catch (error) { console.error(error); }
@@ -1281,14 +1417,12 @@
     // PUSH NOTIFICATIONS (Service Worker)
     // ---------------------------------------------------------
     
-    // 🎯 NEW: UI Hook to check if we need to show the permission button
     async function checkPushStatus() {
         if (!('Notification' in window)) return;
         if (Notification.permission === 'default') {
             document.getElementById('pushBtn').style.display = 'block';
         } else if (Notification.permission === 'granted') {
             document.getElementById('pushBtn').style.display = 'none';
-            // We can silently try to initialize if they already granted it on a previous session
             initPushNotifications(true);
         }
     }
@@ -1305,7 +1439,6 @@
     async function initPushNotifications(silent = false) {
         if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
         try {
-            // 🎯 NEW: Physical button click required to prompt this now
             if (!silent) {
                 const permission = await Notification.requestPermission();
                 if (permission !== 'granted') return;
