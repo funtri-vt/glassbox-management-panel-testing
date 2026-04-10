@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Glassbox School IT Portal</title>
+    
+    <!-- Import Chart.js for Insights Graphing -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+    
+    <style>
+        /* Modern CSS Variables for Light/Dark Mode */
+        :root {
+            --bg-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --border-color: #e5e7eb;
+            --primary: #d97706; /* Changed to amber/warning color for Campus access */
+            --primary-hover: #b45309;
+            --secondary: #6b7280;
+            --secondary-hover: #4b5563;
+            --danger: #dc2626;
+            --danger-hover: #b91c1c;
+            --success: #059669;
+            --success-hover: #047857;
+            --input-bg: #ffffff;
+            --input-border: #d1d5db;
+            --error-bg: #fee2e2;
+            --error-text: #991b1b;
+            --error-border: #f87171;
+            --table-header-bg: #f9fafb;
+            --panel-bg: #f9fafb;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-color: #0f172a;
+                --card-bg: #1e293b;
+                --text-main: #f8fafc;
+                --text-muted: #94a3b8;
+                --border-color: #334155;
+                --primary: #fbbf24;
+                --primary-hover: #f59e0b;
+                --secondary: #64748b;
+                --secondary-hover: #94a3b8;
+                --danger: #ef4444;
+                --danger-hover: #f87171;
+                --success: #10b981;
+                --success-hover: #34d399;
+                --input-bg: #0f172a;
+                --input-border: #475569;
+                --error-bg: #7f1d1d;
+                --error-text: #fca5a5;
+                --error-border: #991b1b;
+                --table-header-bg: #0f172a;
+                --panel-bg: #0f172a;
+            }
+        }
+
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background-color: var(--bg-color); 
+            color: var(--text-main); 
+            margin: 0; 
+            padding: 2rem; 
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .container { 
+            max-width: 1000px; 
+            margin: 0 auto; 
+            background: var(--card-bg); 
+            padding: 2rem; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1); 
+            border: 1px solid var(--border-color);
+        }
+
+        h1, h2, h3 { color: var(--text-main); margin-top: 0; }
+        h1 { border-bottom: 2px solid var(--border-color); padding-bottom: 1rem; }
+        
+        .config-panel, .admin-controls { 
+            background: var(--panel-bg); 
+            padding: 1.5rem; 
+            border-radius: 8px; 
+            border: 1px solid var(--border-color); 
+            margin-bottom: 2rem; 
+        }
+        
+        .config-panel { display: flex; gap: 1.5rem; align-items: flex-end; }
+        .input-group { flex: 1; display: flex; flex-direction: column; gap: 0.5rem; }
+        label { font-size: 0.9rem; font-weight: 600; color: var(--text-muted); }
+
+        input, select { 
+            padding: 0.75rem; 
+            border: 1px solid var(--input-border); 
+            border-radius: 6px; 
+            font-family: inherit; 
+            background-color: var(--input-bg);
+            color: var(--text-main);
+            box-sizing: border-box; 
+            transition: all 0.2s;
+        }
+        input:focus, select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.2); }
+
+        button { 
+            padding: 0.75rem 1.5rem; 
+            border: none; 
+            border-radius: 6px; 
+            font-weight: bold; 
+            cursor: pointer; 
+            transition: background-color 0.2s, transform 0.1s; 
+            color: white;
+        }
+        button:active { transform: scale(0.98); }
+        .btn-primary { background-color: var(--primary); }
+        .btn-primary:hover { background-color: var(--primary-hover); }
+        .btn-secondary { background-color: var(--secondary); }
+        .btn-secondary:hover { background-color: var(--secondary-hover); }
+        .btn-approve { background-color: var(--success); padding: 0.5rem 1rem; font-size: 0.85rem; }
+        .btn-approve:hover { background-color: var(--success-hover); }
+        .btn-deny { background-color: var(--danger); padding: 0.5rem 1rem; font-size: 0.85rem; }
+        .btn-deny:hover { background-color: var(--danger-hover); }
+        
+        #dashboard { display: none; }
+        
+        .tabs { 
+            display: flex; gap: 1rem; margin-bottom: 2rem; border-bottom: 2px solid var(--border-color); 
+            overflow-x: auto; scrollbar-width: none; 
+        }
+        .tabs::-webkit-scrollbar { display: none; }
+        .tab-btn { 
+            background: none; border: none; padding: 0.75rem 1.5rem; color: var(--text-muted); 
+            font-weight: 600; font-size: 1rem; cursor: pointer; border-bottom: 3px solid transparent; 
+            border-radius: 0; white-space: nowrap; 
+        }
+        .tab-btn:hover { color: var(--text-main); }
+        .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .table-responsive { width: 100%; overflow-x: auto; margin-top: 1rem; }
+        table { width: 100%; border-collapse: collapse; min-width: 600px; }
+        th, td { text-align: left; padding: 1rem; border-bottom: 1px solid var(--border-color); word-break: break-word; }
+        th { background-color: var(--table-header-bg); font-weight: 600; color: var(--text-muted); font-size: 0.9rem; text-transform: uppercase; white-space: nowrap; }
+        tr:hover td { background-color: var(--panel-bg); }
+
+        .reason-cell { max-width: 300px; word-wrap: break-word; line-height: 1.4; }
+        .hash-cell { font-family: monospace; color: var(--text-muted); font-size: 0.85rem; word-break: break-all; }
+        .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        
+        .action-header { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; gap: 1rem; }
+        .pagination-controls { display: flex; justify-content: space-between; align-items: center; }
+
+        .chart-wrapper { position: relative; height: 400px; width: 100%; margin-top: 1.5rem; }
+        .filter-bar { display: flex; flex-wrap: wrap; gap: 1rem; background: var(--card-bg); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 1rem; }
+        .filter-item { display: flex; flex-direction: column; gap: 0.25rem; flex: 1; min-width: 120px; }
+        .filter-item input, .filter-item select { padding: 0.5rem; font-size: 0.9rem; }
+        .add-app-row { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+
+        #statusText { margin-top: 1rem; font-weight: bold; }
+        .text-error { color: var(--danger); }
+        .text-success { color: var(--success); }
+        
+        #errorLog { display: none; background: var(--error-bg); color: var(--error-text); padding: 1rem; border-radius: 6px; font-size: 0.85rem; overflow-x: auto; margin-top: 1rem; border: 1px solid var(--error-border); white-space: pre-wrap; font-family: monospace; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .spinner { display: inline-block; width: 1.5rem; height: 1.5rem; border: 3px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
+        .loading-row td { padding: 3rem !important; }
+        .loading-content { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; color: var(--text-muted); font-weight: 600; }
+
+        @media (max-width: 768px) {
+            body { padding: 1rem; }
+            .container { padding: 1.5rem; }
+            .config-panel, .action-header, .pagination-controls, .add-app-row { flex-direction: column; align-items: stretch; }
+            .action-header button, .pagination-controls button { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 2rem;">
+        <h1 style="border: none; padding: 0; margin: 0;">🏫 Glassbox School IT Portal</h1>
+        <button id="logoutBtn" class="btn-secondary" style="display: none;" onclick="handleLogout()">Sign Out</button>
+    </div>
+    
+    <div class="config-panel" id="loginPanel">
+        <div class="input-group">
+            <label for="loginUsername">Username</label>
+            <input type="text" id="loginUsername" placeholder="Enter username" required>
+        </div>
+        <div class="input-group">
+            <label for="loginPassword">Password</label>
+            <input type="password" id="loginPassword" placeholder="Enter password" required>
+        </div>
+        <button class="btn-primary" id="loginBtn">Secure Login</button>
+    </div>
+    
+    <div id="statusText"></div>
+    <pre id="errorLog"></pre>
+
+    <div id="dashboard">
+        <!-- Dashboard Tabs -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('filter', this)">🛡️ Web Filter</button>
+            <button class="tab-btn" onclick="switchTab('insights', this)">📊 Insights & Analytics</button>
+            <button class="tab-btn" onclick="switchTab('org', this)">🏢 School Staff</button>
+        </div>
+
+        <!-- TAB 1: WEB FILTER -->
+        <div id="tab-filter" class="tab-content active">
+            <div class="admin-controls">
+                <h3>🚫 Manually Block Domains</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">Specify targets to block for your campus. Choose "Domain" to wildcard subdomains, or "Path" for specific URLs.</p>
+                
+                <div class="table-responsive" style="margin-top: 0.5rem;">
+                    <table style="width: 100%;">
+                        <thead>
+                            <tr>
+                                <th style="width: 60%;">Target (e.g., badsite.com)</th>
+                                <th style="width: 30%;">Match Type</th>
+                                <th style="width: 10%; text-align: center;">Remove</th>
+                            </tr>
+                        </thead>
+                        <tbody id="blockTableBody"></tbody>
+                    </table>
+                </div>
+
+                <div class="action-header">
+                    <button type="button" class="btn-secondary" id="addRowBtn" style="padding: 0.5rem 1rem;">+ Add Row</button>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <select id="globalBlockDuration" style="padding: 0.5rem; font-size: 0.85rem;">
+                            <option value="0">Permanent</option>
+                            <option value="1">1 Hour</option>
+                            <option value="24">24 Hours</option>
+                            <option value="168">1 Week</option>
+                        </select>
+                        <button type="button" class="btn-deny" id="blockBtn">Block All Entries</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ACTIVE FILTER RULES -->
+            <div class="admin-controls">
+                <div class="action-header" style="margin-top: 0;">
+                    <div>
+                        <h3>📋 Active Filter Rules</h3>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">View and manage currently active blocks and exceptions for your campus.</p>
+                    </div>
+                    <button class="btn-secondary" onclick="loadActiveFilters()" style="padding: 0.5rem 1rem; font-size: 0.85rem;">🔄 Refresh</button>
+                </div>
+                
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Target</th>
+                                <th>Match Type</th>
+                                <th>Action</th>
+                                <th>Expires At</th>
+                                <th style="width: 100px; text-align: center;">Remove</th>
+                            </tr>
+                        </thead>
+                        <tbody id="activeRulesTableBody"></tbody>
+                    </table>
+                </div>
+                
+                <div class="pagination-controls" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                    <button class="btn-secondary" id="btnPrevRules" onclick="changeFilterPage(-1)" disabled>← Previous</button>
+                    <span id="rulesPageIndicator" style="font-size: 0.9rem; font-weight: bold; color: var(--text-muted);">Page 1</span>
+                    <button class="btn-secondary" id="btnNextRules" onclick="changeFilterPage(1)" disabled>Next →</button>
+                </div>
+            </div>
+
+            <h2>Pending Unblock Requests</h2>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Student Identity Hash</th>
+                            <th>Requested URL</th>
+                            <th>Academic Reason</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="requestsTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB 2: INSIGHTS & ROI -->
+        <div id="tab-insights" class="tab-content">
+            <div class="admin-controls">
+                <h3>📈 Application Usage & ROI Tracking</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0; margin-bottom: 1rem;">Visualize time spent across tracked applications for your campus.</p>
+                
+                <div class="filter-bar">
+                    <div class="filter-item">
+                        <label>Timeframe</label>
+                        <select id="filterTimeframe">
+                            <option value="7">Last 7 Days (Includes Today)</option>
+                            <option value="30" selected>Last 30 Days (Historical)</option>
+                            <option value="all">All Time (Historical)</option>
+                        </select>
+                    </div>
+                    <div class="filter-item">
+                        <label>Traffic Type</label>
+                        <select id="filterStatus">
+                            <option value="all" selected>All Traffic</option>
+                            <option value="unapproved">Shadow IT (Unapproved Only)</option>
+                            <option value="approved">Approved Apps Only</option>
+                        </select>
+                    </div>
+                    <div class="filter-item">
+                        <label>Display Limit</label>
+                        <input type="number" id="filterLimit" value="50" min="5" max="200">
+                    </div>
+                    <div class="filter-item">
+                        <label>Student Hash (Optional)</label>
+                        <input type="text" id="filterHash" placeholder="Exact hash to isolate...">
+                    </div>
+                    <div class="filter-item" style="flex: auto; justify-content: flex-end;">
+                        <button class="btn-primary" onclick="refreshInsightsTab()" style="width: 100%;">Apply Filters & Refresh</button>
+                    </div>
+                </div>
+                
+                <div id="noDataMessage"></div>
+                <div class="chart-wrapper" id="chartContainer" style="display: none;">
+                    <canvas id="roiChart"></canvas>
+                </div>
+
+                <div id="roiTableContainer" class="table-responsive" style="display: none; margin-top: 1.5rem;">
+                    <table style="width: 100%;">
+                        <thead>
+                            <tr>
+                                <th>Target Domain</th>
+                                <th>Total Time (Min)</th>
+                                <th>Unique Students</th>
+                                <th>Avg Time / Student</th>
+                            </tr>
+                        </thead>
+                        <tbody id="roiTableBody"></tbody>
+                    </table>
+                    <div id="roiPagination" class="pagination-controls" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color); display: none;">
+                        <button class="btn-secondary" id="btnPrevRoi" onclick="changeRoiPage(-1)" disabled>← Previous</button>
+                        <span id="pageIndicatorRoi" style="font-size: 0.9rem; font-weight: bold; color: var(--text-muted);">Page 1</span>
+                        <button class="btn-secondary" id="btnNextRoi" onclick="changeRoiPage(1)" disabled>Next →</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- OUTLIERS TABLE -->
+            <div class="admin-controls">
+                <div class="action-header" style="margin-top: 0;">
+                    <div>
+                        <h3>🔥 Top Distracted Students (Outliers)</h3>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">Isolate individual students exceeding high-usage thresholds.</p>
+                    </div>
+                    <button class="btn-secondary" onclick="loadOutliers()" style="padding: 0.5rem 1rem; font-size: 0.85rem;">🔄 Refresh</button>
+                </div>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Student Identity Hash</th>
+                                <th>Target Domain</th>
+                                <th>Continuous Minutes</th>
+                                <th style="width: 200px;">Quick Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="outliersTableBody"></tbody>
+                    </table>
+                </div>
+                <div id="outliersPagination" class="pagination-controls" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color); display: none;">
+                    <button class="btn-secondary" id="btnPrevOutliers" onclick="changeOutliersPage(-1)" disabled>← Previous</button>
+                    <span id="pageIndicatorOutliers" style="font-size: 0.9rem; font-weight: bold; color: var(--text-muted);">Page 1</span>
+                    <button class="btn-secondary" id="btnNextOutliers" onclick="changeOutliersPage(1)" disabled>Next →</button>
+                </div>
+            </div>
+
+            <!-- LIVE TRAFFIC -->
+            <div class="admin-controls">
+                <div class="action-header" style="margin-top: 0;">
+                    <div>
+                        <h3>🚦 Live URL Traffic (Audit Log)</h3>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">Monitor exact URLs visited to uncover hit-and-run shadow IT.</p>
+                    </div>
+                    <button class="btn-secondary" onclick="loadLiveTraffic()" style="padding: 0.5rem 1rem; font-size: 0.85rem;">🔄 Refresh</button>
+                </div>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 50%;">Normalized URL</th>
+                                <th>Status</th>
+                                <th>Hits</th>
+                                <th style="width: 200px;">Quick Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="liveTrafficTableBody"></tbody>
+                    </table>
+                </div>
+                <div id="trafficPagination" class="pagination-controls" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color); display: none;">
+                    <button class="btn-secondary" id="btnPrevTraffic" onclick="changeTrafficPage(-1)" disabled>← Previous</button>
+                    <span id="pageIndicatorTraffic" style="font-size: 0.9rem; font-weight: bold; color: var(--text-muted);">Page 1</span>
+                    <button class="btn-secondary" id="btnNextTraffic" onclick="changeTrafficPage(1)" disabled>Next →</button>
+                </div>
+            </div>
+
+            <!-- APPROVED APPS -->
+            <div class="admin-controls">
+                <h3>✅ Manage Approved Apps</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">Add academic domains for your campus.</p>
+                <div class="add-app-row">
+                    <input type="text" id="newAppDomain" placeholder="Domain (e.g., ixl.com)" style="flex: 2;">
+                    <input type="text" id="newAppName" placeholder="App Name (e.g., IXL Math)" style="flex: 2;">
+                    <input type="text" id="newAppCategory" placeholder="Category (e.g., Testing)" style="flex: 1;">
+                    <button class="btn-approve" onclick="addApprovedApp()">Add App</button>
+                </div>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Domain</th>
+                                <th>Application Name</th>
+                                <th>Category</th>
+                                <th style="width: 100px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="approvedAppsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: ORGANIZATION (STRIPPED DOWN FOR SCHOOL ADMINS) -->
+        <div id="tab-org" class="tab-content">
+            <div class="admin-controls">
+                <h3>👥 Manage Teachers & Staff</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0;">Create Teacher accounts for your specific school.</p>
+                
+                <div class="add-app-row" style="flex-wrap: wrap;">
+                    <input type="text" id="newStaffUser" placeholder="Username" style="flex: 1; min-width: 150px;">
+                    <input type="password" id="newStaffPass" placeholder="Password" style="flex: 1; min-width: 150px;">
+                    <select id="newStaffRole" style="flex: 1; min-width: 150px;">
+                        <option value="teacher">Teacher</option>
+                        <option value="school_admin">School Admin</option>
+                    </select>
+                    <button class="btn-primary" onclick="createStaff()">Create Account</button>
+                </div>
+
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Role</th>
+                                <th>Last Active</th>
+                                <th style="width: 250px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="staffTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    let currentWorkerUrl = "";
+    let currentSecret = ""; 
+    let currentUserRole = "";
+    let roiChartInstance = null; 
+
+    // Pagination State
+    let currentFilterPage = 1; const filterPageLimit = 10; let totalFilterPages = 1;
+    let roiData = [], currentRoiPage = 1;
+    let outliersData = [], currentOutliersPage = 1;
+    let trafficData = [], currentTrafficPage = 1;
+    const analyticsPageLimit = 10;
+
+    document.getElementById('loginBtn').addEventListener('click', handleLogin);
+    document.getElementById('blockBtn').addEventListener('click', blockDomains);
+    document.getElementById('addRowBtn').addEventListener('click', () => addBlockRow());
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        addBlockRow();
+        try {
+            const configRes = await fetch('config.json');
+            if (configRes.ok) {
+                const config = await configRes.json();
+                if (config.workerUrl) currentWorkerUrl = config.workerUrl.endsWith('/') ? config.workerUrl.slice(0, -1) : config.workerUrl;
+            }
+        } catch (err) {}
+    });
+
+    function switchTab(tabId, btnElement) {
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(`tab-${tabId}`).classList.add('active');
+        btnElement.classList.add('active');
+    }
+
+    function displayVerboseError(shortMessage, errorObj) {
+        const statusText = document.getElementById('statusText');
+        const errorLog = document.getElementById('errorLog');
+        statusText.textContent = `❌ ${shortMessage}`;
+        statusText.className = "text-error";
+        errorLog.style.display = "block";
+        errorLog.textContent = `=== ERROR ===\n${errorObj.message || errorObj}`;
+    }
+
+    function clearErrors() {
+        document.getElementById('statusText').textContent = "";
+        document.getElementById('statusText').className = "";
+        document.getElementById('errorLog').style.display = "none";
+        document.getElementById('errorLog').textContent = "";
+    }
+
+    // ---------------------------------------------------------
+    // AUTHENTICATION
+    // ---------------------------------------------------------
+    async function handleLogin() {
+        if (!currentWorkerUrl) {
+            currentWorkerUrl = prompt("Worker URL missing from config.json. Please enter it manually:");
+            if (!currentWorkerUrl) return;
+            currentWorkerUrl = currentWorkerUrl.endsWith('/') ? currentWorkerUrl.slice(0, -1) : currentWorkerUrl;
+        }
+
+        const usernameInput = document.getElementById('loginUsername').value.trim();
+        const passwordInput = document.getElementById('loginPassword').value.trim();
+        const statusText = document.getElementById('statusText');
+
+        if (!usernameInput || !passwordInput) return;
+
+        clearErrors();
+        statusText.innerHTML = '<span class="spinner" style="vertical-align: middle;"></span> Authenticating...';
+        document.getElementById('loginBtn').disabled = true;
+        
+        try {
+            const response = await fetch(`${currentWorkerUrl}/api/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: usernameInput, password: passwordInput })
+            });
+
+            if (!response.ok) throw new Error(await response.text());
+            const data = await response.json();
+            
+            // STRICT SCOPE CHECK: Ensure only authorized admins can log in here.
+            if (data.role !== 'school_admin' && data.role !== 'master_admin') {
+                throw new Error("Access Denied: You must be a School Admin or Master Admin to access this portal.");
+            }
+
+            currentSecret = data.token;
+            currentUserRole = data.role;
+            
+            document.getElementById('loginPanel').style.display = "none";
+            document.getElementById('logoutBtn').style.display = "block";
+            document.getElementById('dashboard').style.display = "block";
+            
+            // Initialize Dashboard
+            await loadRequests();
+            loadActiveFilters(); 
+            refreshInsightsTab(); 
+            loadApprovedApps();
+            loadStaff();
+            initPushNotifications(); 
+            
+            statusText.innerHTML = '<span class="text-success">✅ Connected securely!</span>';
+            setTimeout(() => statusText.innerHTML = '', 3000);
+
+        } catch (error) {
+            displayVerboseError("Authentication Failed.", error);
+            document.getElementById('loginBtn').disabled = false;
+        }
+    }
+
+    async function handleLogout() {
+        try {
+            await fetch(`${currentWorkerUrl}/api/auth/logout`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${currentSecret}` }
+            });
+        } catch (e) {} 
+        location.reload();
+    }
+
+    // ---------------------------------------------------------
+    // STAFF MANAGEMENT (Scoped to School Admin)
+    // ---------------------------------------------------------
+    async function loadStaff() {
+        try {
+            const res = await fetch(`${currentWorkerUrl}/api/admin/users`, {
+                headers: { 'Authorization': `Bearer ${currentSecret}` }
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            const tbody = document.getElementById('staffTableBody');
+            tbody.innerHTML = "";
+
+            data.users.forEach(u => {
+                const lastActive = u.last_active_at ? new Date(u.last_active_at).toLocaleString() : 'Never';
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><strong>${u.username}</strong></td>
+                    <td style="text-transform: capitalize;">${u.role.replace('_', ' ')}</td>
+                    <td style="font-size: 0.85rem;">${lastActive}</td>
+                    <td class="actions">
+                        <button class="btn-secondary" onclick="resetStaffPassword(${u.id})" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">Reset Pass</button>
+                        <button class="btn-deny" onclick="deleteStaff(${u.id})" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">Delete</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (e) { console.error("Error loading staff:", e); }
+    }
+
+    async function createStaff() {
+        const username = document.getElementById('newStaffUser').value.trim();
+        const password = document.getElementById('newStaffPass').value.trim();
+        const role = document.getElementById('newStaffRole').value;
+
+        if (!username || !password) return alert("Username and password required.");
+
+        try {
+            const res = await fetch(`${currentWorkerUrl}/api/admin/users`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${currentSecret}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'create', username, password, role }) // Notice: schoolId is omitted. Backend handles scoping!
+            });
+            if (res.ok) {
+                document.getElementById('newStaffUser').value = "";
+                document.getElementById('newStaffPass').value = "";
+                loadStaff();
+            } else alert((await res.json()).error || "Failed to create staff.");
+        } catch (e) { alert("Error creating staff."); }
+    }
+
+    async function resetStaffPassword(id) {
+        const newPassword = prompt("Enter new password for this user:");
+        if (!newPassword) return;
+
+        try {
+            const res = await fetch(`${currentWorkerUrl}/api/admin/users`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${currentSecret}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'reset_password', id, password: newPassword })
+            });
+            if (res.ok) alert("Password reset successfully. User logged out.");
+            else alert((await res.json()).error || "Failed to reset password.");
+        } catch (e) { alert("Error resetting password."); }
+    }
+
+    async function deleteStaff(id) {
+        if (!confirm("Are you sure you want to delete this staff account?")) return;
+        try {
+            const res = await fetch(`${currentWorkerUrl}/api/admin/users`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${currentSecret}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'delete', id })
+            });
+            if (res.ok) loadStaff();
+            else alert((await res.json()).error || "Failed to delete.");
+        } catch (e) { alert("Error deleting staff."); }
+    }
+
+    // ---------------------------------------------------------
+    // FILTER MANAGEMENT
+    // ---------------------------------------------------------
+    function addBlockRow(defaultTarget = '', defaultType = 'domain') {
+        const tbody = document.getElementById('blockTableBody');
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><input type="text" class="block-target" placeholder="badsite.com or ^https:\/\/.*" value="${defaultTarget}" style="width: 100%; margin: 0;" required></td>
+            <td>
+                <select class="block-type" style="width: 100%; margin: 0;">
+                    <option value="domain" ${defaultType === 'domain' ? 'selected' : ''}>Domain (Wildcard)</option>
+                    <option value="path" ${defaultType === 'path' ? 'selected' : ''}>Exact Path</option>
+                </select>
+            </td>
+            <td style="text-align: center;"><button type="button" class="btn-deny" onclick="this.closest('tr').remove()" style="padding: 0.5rem 0.75rem; margin: 0;">X</button></td>
+        `;
+        tbody.appendChild(tr);
+    }
+
+    async function blockDomains() {
+        const rows = document.querySelectorAll('#blockTableBody tr');
+        const blocks = [];
+
+        rows.forEach(row => {
+            let target = row.querySelector('.block-target').value.trim();
+            const matchType = row.querySelector('.block-type').value;
+            if (target) blocks.push({ target: target.toLowerCase(), matchType: matchType });
+        });
+
+        if (blocks.length === 0) return alert("Please enter at least one target to block.");
+        if (!confirm(`Are you sure you want to block ${blocks.length} entry/entries?`)) return;
+
+        const durationSelect = document.getElementById('globalBlockDuration');
+        const expiresInHours = durationSelect ? parseFloat(durationSelect.value) : 0;
+        const blockBtn = document.getElementById('blockBtn');
+        blockBtn.disabled = true; blockBtn.textContent = "Blocking...";
+
+        try {
+            const response = await fetch(`${currentWorkerUrl}/api/admin/filter/block`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${currentSecret}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ blocks: blocks, expiresInHours: expiresInHours })
+            });
+
+            if (response.ok) {
+                alert(`Successfully blocked ${blocks.length} entry/entries!`);
+                document.getElementById('blockTableBody').innerHTML = '';
+                addBlockRow();
+                loadActiveFilters(1);
+            } else throw new Error(await response.text());
+        } catch (error) { displayVerboseError("Failed to block entries.", error); } 
+        finally { blockBtn.disabled = false; blockBtn.textContent = "Block All Entries"; }
+    }
+
+    async function loadRequests() {
+        const tbody = document.getElementById('requestsTableBody');
+        tbody.innerHTML = `<tr><td colspan="5" class="loading-row"><div class="loading-content"><div class="spinner"></div><span>Loading requests...</span></div></td></tr>`;
+        
+        try {
+            const response = await fetch(`${currentWorkerUrl}/api/admin/filter/requests`, {
+                headers: { 'Authorization': `Bearer ${currentSecret}` }
+            });
+            if (!response.ok) throw new Error("Failed to load requests");
+            
+            const requests = await response.json();
+            tbody.innerHTML = "";
+
+            if (requests.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">No pending requests! 🎉</td></tr>`;
+                return;
+            }
+
+            requests.forEach(req => {
+                const date = new Date(req.created_at).toLocaleString();
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${date}</td>
+                    <td class="hash-cell">${req.student_hash.substring(0, 16)}...</td>
+                    <td><strong>${req.url}</strong></td>
+                    <td class="reason-cell">${req.reason}</td>
+                    <td class="actions" style="flex-direction: column; align-items: flex-start;">
+                        <select id="duration-${req.id}" style="padding: 0.4rem; font-size: 0.8rem; margin-bottom: 0.5rem; width: 100%;">
+                            <option value="0">Permanent</option>
+                            <option value="1">1 Hour</option>
+                            <option value="24">24 Hours</option>
+                        </select>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn-approve" onclick="resolveRequest(${req.id}, 'approve', '${req.url}')">Approve</button>
+                            <button class="btn-deny" onclick="resolveRequest(${req.id}, 'deny', '${req.url}')">Deny</button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch(e) { console.error(e); }
+    }
+
+    async function resolveRequest(requestId, action, fullUrl) {
+        if (!confirm(`Are you sure you want to ${action} this request?`)) return;
+
+        let target = fullUrl, matchType = 'domain', expiresInHours = 0;
+        if (action === 'approve') {
+            const selectEl = document.getElementById(`duration-${requestId}`);
+            if (selectEl) expiresInHours = parseFloat(selectEl.value);
+        }
+
+        try {
+            let cleanUrl = fullUrl.replace(/^https?:\/\//, '').replace(/^www\./, '');
+            if (cleanUrl.includes('/') && cleanUrl.split('/')[1] !== '') { target = cleanUrl; matchType = 'path'; } 
+            else { target = cleanUrl.replace(/\/$/, ''); matchType = 'domain'; }
+        } catch (e) { target = fullUrl; matchType = 'domain'; }
+
+        try {
+            const response = await fetch(`${currentWorkerUrl}/api/admin/filter/resolve`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${currentSecret}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ requestId, action, target, matchType, expiresInHours })
+            });
+
+            if (response.ok) loadRequests(); 
+            else throw new Error("Server error");
+        } catch (error) { alert(`Failed to ${action} request.`); }
+    }
+
+    async function loadActiveFilters(page = currentFilterPage) {
+        currentFilterPage = page;
+        const tbody = document.getElementById('activeRulesTableBody');
+        tbody.innerHTML = `<tr><td colspan="5" class="loading-row"><div class="spinner"></div></td></tr>`;
+        
+        try {
+            const response = await fetch(`${currentWorkerUrl}/api/admin/filter/rules?page=${page}&limit=${filterPageLimit}`, {
+                headers: { 'Authorization': `Bearer ${currentSecret}` }
+            });
+            if (!response.ok) throw new Error("Failed to load active rules");
+
+            const data = await response.json();
+            tbody.innerHTML = "";
+
+            if (!data.rules || data.rules.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">No active rules found.</td></tr>`;
+                return;
+            }
+
+            totalFilterPages = Math.ceil(data.total / filterPageLimit) || 1;
+            document.getElementById('rulesPageIndicator').textContent = `Page ${currentFilterPage} of ${totalFilterPages}`;
+            document.getElementById('btnPrevRules').disabled = currentFilterPage <= 1;
+            document.getElementById('btnNextRules').disabled = currentFilterPage >= totalFilterPages;
+
+            data.rules.forEach(rule => {
+                const actionBadge = `<span style="background: ${rule.action === 'block' ? 'var(--danger)' : 'var(--success)'}; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold; text-transform: uppercase;">${rule.action}</span>`;
+                
+                let expiresText = '<span style="color: var(--text-muted);">Permanent</span>';
+                if (rule.expires_at) {
+                    const utcDateStr = rule.expires_at.replace(' ', 'T') + 'Z';
+                    const d = new Date(utcDateStr);
+                    if (!isNaN(d.getTime())) {
+                        expiresText = d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+                        if (d.getTime() - Date.now() < 7200000) expiresText = `<span style="color: #d97706; font-weight: bold;">${expiresText} ⏳</span>`;
+                    }
+                }
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="font-family: monospace; font-size: 0.9rem;">${rule.target}</td>
+                    <td style="text-transform: capitalize;">${rule.match_type}</td>
+                    <td>${actionBadge}</td>
+                    <td style="font-size: 0.85rem;">${expiresText}</td>
+                    <td style="text-align: center;"><button class="btn-deny" onclick="removeActiveRule(${rule.id}, '${rule.target}')" style="padding: 0.4rem 0.6rem;">Remove</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (error) { console.error(error); }
+    }
+
+    function changeFilterPage(direction) {
+        const newPage = currentFilterPage + direction;
+        if (newPage >= 1 && newPage <= totalFilterPages) loadActiveFilters(newPage);
+    }
+
+    async function removeActiveRule(ruleId, target) {
+        if (!confirm(`Are you sure you want to remove the active rule for:\n\n${target}?`)) return;
+        try {
+            const response = await fetch(`${currentWorkerUrl}/api/admin/filter/rules/remove`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${currentSecret}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ruleId: ruleId })
+            });
+            if (response.ok) loadActiveFilters(currentFilterPage); 
+            else alert("Failed to remove rule.");
+        } catch (error) { console.error(error); }
+    }
+
+    // ---------------------------------------------------------
+    // INSIGHTS & ROI
+    // ---------------------------------------------------------
+    function refreshInsightsTab() {
+        loadInsights();
+        loadLiveTraffic();
+        loadOutliers();
+    }
+
+    async function loadInsights() {
+        const chartContainer = document.getElementById('chartContainer');
+        const roiTableContainer = document.getElementById('roiTableContainer');
+        const noDataMsg = document.getElementById('noDataMessage');
+        
+        const timeframe = document.getElementById('filterTimeframe').value;
+        const limit = document.getElementById('filterLimit').value;
+        const hash = document.getElementById('filterHash').value.trim();
+        
+        const params = new URLSearchParams({ timeframe, limit });
+        if (hash) params.append('studentHash', hash);
+
+        chartContainer.style.display = 'none'; roiTableContainer.style.display = 'none';
+        noDataMsg.style.display = 'block';
+        noDataMsg.innerHTML = `<div style="text-align: center; padding: 3rem 1rem; color: var(--text-muted);"><div class="spinner"></div><br><strong>Aggregating telemetry data...</strong></div>`;
+
+        try {
+            const response = await fetch(`${currentWorkerUrl}/api/admin/insight/reports?${params.toString()}`, {
+                headers: { 'Authorization': `Bearer ${currentSecret}` }
+            });
+            if (!response.ok) throw new Error("Failed to load insights");
+            const data = await response.json();
+
+            if (data.message || !data.reports || data.reports.length === 0) {
+                noDataMsg.innerHTML = `<div style="text-align: center; padding: 3rem 1rem; color: var(--text-muted);"><strong>No analytics data matched these filters.</strong></div>`;
+                return;
+            }
+
+            noDataMsg.style.display = 'none'; chartContainer.style.display = 'block'; roiTableContainer.style.display = 'block';
+            renderChart(data.reports);
+            roiData = data.reports; displayRoiPage(1);
+        } catch (error) { console.error(error); }
+    }
+
+    function displayRoiPage(page) {
+        currentRoiPage = page;
+        const tbody = document.getElementById('roiTableBody');
+        tbody.innerHTML = "";
+        const totalPages = Math.ceil(roiData.length / analyticsPageLimit) || 1;
+        
+        roiData.slice((page - 1) * analyticsPageLimit, page * analyticsPageLimit).forEach(r => {
+            const avg = r.unique_students > 0 ? (r.total_minutes / r.unique_students).toFixed(1) : r.total_minutes;
+            const isOutlier = avg > 60;
+            const flame = isOutlier ? '<span title="High average!" style="color: var(--danger); margin-left: 0.5rem;">🔥</span>' : '';
+            
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td><strong>${r.target}</strong></td><td>${r.total_minutes}</td><td>${r.unique_students}</td><td>${avg} min ${flame}</td>`;
+            tbody.appendChild(tr);
+        });
+
+        document.getElementById('pageIndicatorRoi').textContent = `Page ${page} of ${totalPages}`;
+        document.getElementById('btnPrevRoi').disabled = page <= 1; document.getElementById('btnNextRoi').disabled = page >= totalPages;
+        document.getElementById('roiPagination').style.display = totalPages > 1 ? 'flex' : 'none';
+    }
+
+    function changeRoiPage(direction) {
+        const newPage = currentRoiPage + direction;
+        if (newPage >= 1 && newPage <= Math.ceil(roiData.length / analyticsPageLimit)) displayRoiPage(newPage);
+    }
+
+    function renderChart(reportsData) {
+        const ctx = document.getElementById('roiChart').getContext('2d');
+        if (roiChartInstance) roiChartInstance.destroy();
+        
+        const style = getComputedStyle(document.body);
+        roiChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: reportsData.map(r => r.target),
+                datasets: [{ label: 'Total Minutes', data: reportsData.map(r => r.total_minutes), backgroundColor: style.getPropertyValue('--primary').trim(), borderRadius: 6 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+        });
+    }
+
+    async function loadOutliers() {
+        const tbody = document.getElementById('outliersTableBody');
+        tbody.innerHTML = `<tr><td colspan="4" class="loading-row"><div class="spinner"></div></td></tr>`;
+        try {
+            const response = await fetch(`${currentWorkerUrl}/api/admin/insight/outliers?timeframe=7&limit=50&minMinutes=60`, {
+                headers: { 'Authorization': `Bearer ${currentSecret}` }
+            });
+            if (!response.ok) throw new Error("Failed");
+            const data = await response.json();
+            
+            if (!data.outliers || data.outliers.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2rem;">No outliers detected.</td></tr>`;
+                return;
+            }
+            outliersData = data.outliers; displayOutliersPage(1);
+        } catch (error) { console.error(error); }
+    }
+
+    function displayOutliersPage(page) {
+        currentOutliersPage = page;
+        const tbody = document.getElementById('outliersTableBody');
+        tbody.innerHTML = "";
+        const totalPages = Math.ceil(outliersData.length / analyticsPageLimit) || 1;
+        
+        outliersData.slice((page - 1) * analyticsPageLimit, page * analyticsPageLimit).forEach(row => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="hash-cell">${row.student_hash.substring(0, 16)}...</td>
+                <td style="font-family: monospace; font-size: 0.85rem;">${row.target}</td>
+                <td style="color: var(--danger); font-weight: bold;">${row.total_minutes} min</td>
+                <td class="actions">
+                    <button class="btn-deny" onclick="quickBlock('${row.target}', 'path')">Block Path</button>
+                    <button class="btn-deny" onclick="quickBlock('${row.target.split('/')[0]}', 'domain')" style="background-color: var(--secondary);">Block Domain</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+        document.getElementById('pageIndicatorOutliers').textContent = `Page ${page} of ${totalPages}`;
+        document.getElementById('btnPrevOutliers').disabled = page <= 1; document.getElementById('btnNextOutliers').disabled = page >= totalPages;
+        document.getElementById('outliersPagination').style.display = totalPages > 1 ? 'flex' : 'none';
+    }
+
+    function changeOutliersPage(direction) {
+        const newPage = currentOutliersPage + direction;
+        if (newPage >= 1 && newPage <= Math.ceil(outliersData.length / analyticsPageLimit)) displayOutliersPage(newPage);
+    }
+
+    async function loadLiveTraffic() {
+        const tbody = document.getElementById('liveTrafficTableBody');
+        tbody.innerHTML = `<tr><td colspan="4" class="loading-row"><div class="spinner"></div></td></tr>`;
+        try {
+            const response = await fetch(`${currentWorkerUrl}/api/admin/insight/traffic?timeframe=7&limit=50`, {
+                headers: { 'Authorization': `Bearer ${currentSecret}` }
+            });
+            if (!response.ok) throw new Error("Failed");
+            const data = await response.json();
+            if (!data.traffic || data.traffic.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2rem;">No live traffic data available.</td></tr>`;
+                return;
+            }
+            trafficData = data.traffic; displayTrafficPage(1);
+        } catch (error) { console.error(error); }
+    }
+
+    function displayTrafficPage(page) {
+        currentTrafficPage = page;
+        const tbody = document.getElementById('liveTrafficTableBody');
+        tbody.innerHTML = "";
+        const totalPages = Math.ceil(trafficData.length / analyticsPageLimit) || 1;
+        
+        trafficData.slice((page - 1) * analyticsPageLimit, page * analyticsPageLimit).forEach(row => {
+            const tr = document.createElement('tr');
+            const badgeColor = row.status === 'approved' ? 'var(--success)' : 'var(--danger)';
+            tr.innerHTML = `
+                <td style="font-family: monospace; font-size: 0.85rem;">${row.target}</td>
+                <td><span style="background: ${badgeColor}; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold;">${row.status.toUpperCase()}</span></td>
+                <td><strong>${row.hits}</strong></td>
+                <td class="actions">
+                    <button class="btn-deny" onclick="quickBlock('${row.target}', 'path')">Block Path</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+        document.getElementById('pageIndicatorTraffic').textContent = `Page ${page} of ${totalPages}`;
+        document.getElementById('btnPrevTraffic').disabled = page <= 1; document.getElementById('btnNextTraffic').disabled = page >= totalPages;
+        document.getElementById('trafficPagination').style.display = totalPages > 1 ? 'flex' : 'none';
+    }
+
+    function changeTrafficPage(direction) {
+        const newPage = currentTrafficPage + direction;
+        if (newPage >= 1 && newPage <= Math.ceil(trafficData.length / analyticsPageLimit)) displayTrafficPage(newPage);
+    }
+
+    async function quickBlock(target, matchType) {
+        if (!confirm(`Are you sure you want to block this ${matchType}?\n\nTarget: ${target}`)) return;
+        try {
+            const response = await fetch(`${currentWorkerUrl}/api/admin/filter/block`, {
+                method: 'POST', headers: { 'Authorization': `Bearer ${currentSecret}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ blocks: [{ target, matchType }] })
+            });
+            if (response.ok) { alert(`Successfully blocked ${target}!`); loadLiveTraffic(); } 
+            else alert("Failed to block target.");
+        } catch (error) { console.error(error); }
+    }
+
+    async function loadApprovedApps() {
+        const tbody = document.getElementById('approvedAppsTableBody');
+        tbody.innerHTML = `<tr><td colspan="4" class="loading-row"><div class="spinner"></div></td></tr>`;
+        try {
+            const response = await fetch(`${currentWorkerUrl}/api/admin/insight/apps`, { headers: { 'Authorization': `Bearer ${currentSecret}` }});
+            if (!response.ok) throw new Error("Failed");
+            const data = await response.json();
+            tbody.innerHTML = "";
+            if (!data.apps || data.apps.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2rem;">No apps have been added to the approved list yet.</td></tr>`;
+                return;
+            }
+            data.apps.forEach(app => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td><strong>${app.domain}</strong></td><td>${app.app_name}</td><td><span style="background: var(--border-color); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem;">${app.category || 'General'}</span></td><td><button class="btn-deny" onclick="removeApprovedApp(${app.id})">Remove</button></td>`;
+                tbody.appendChild(tr);
+            });
+        } catch (error) { console.error(error); }
+    }
+
+    async function addApprovedApp() {
+        const domain = document.getElementById('newAppDomain').value.trim();
+        const appName = document.getElementById('newAppName').value.trim();
+        const category = document.getElementById('newAppCategory').value.trim();
+        if (!domain || !appName) return alert("Domain and App Name are required.");
+        try {
+            const response = await fetch(`${currentWorkerUrl}/api/admin/insight/apps`, {
+                method: 'POST', headers: { 'Authorization': `Bearer ${currentSecret}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: "add", domain, appName, category })
+            });
+            if (response.ok) { document.getElementById('newAppDomain').value = ""; document.getElementById('newAppName').value = ""; loadApprovedApps(); } 
+            else alert("Failed to add app.");
+        } catch (error) { console.error(error); }
+    }
+
+    async function removeApprovedApp(id) {
+        if (!confirm("Remove this app from the approved tracking list?")) return;
+        try {
+            const response = await fetch(`${currentWorkerUrl}/api/admin/insight/apps`, {
+                method: 'POST', headers: { 'Authorization': `Bearer ${currentSecret}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: "remove", id: id })
+            });
+            if (response.ok) loadApprovedApps();
+        } catch (error) { console.error(error); }
+    }
+
+    // ---------------------------------------------------------
+    // PUSH NOTIFICATIONS (Service Worker)
+    // ---------------------------------------------------------
+    function urlBase64ToUint8Array(base64String) {
+        const padding = '='.repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+        const rawData = window.atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+        return outputArray;
+    }
+
+    async function initPushNotifications() {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+        try {
+            const registration = await navigator.serviceWorker.register(new URL('sw.js', window.location.href).href);
+            let sw = registration.active || registration.waiting || registration.installing;
+            if (sw) sw.postMessage({ type: 'SET_CREDENTIALS', workerUrl: currentWorkerUrl, adminSecret: currentSecret });
+            
+            const permission = await Notification.requestPermission();
+            if (permission !== 'granted') return;
+
+            const vapidRes = await fetch(`${currentWorkerUrl}/api/admin/vapid-public`, { headers: { 'Authorization': `Bearer ${currentSecret}` }});
+            if (!vapidRes.ok) return;
+            const { publicKey } = await vapidRes.json();
+
+            const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) });
+
+            await fetch(`${currentWorkerUrl}/api/admin/push/subscribe`, {
+                method: 'POST', headers: { 'Authorization': `Bearer ${currentSecret}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(subscription)
+            });
+        } catch (err) { console.error("Push registration failed:", err); }
+    }
+
+</script>
+
+</body>
+</html>
