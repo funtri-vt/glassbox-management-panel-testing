@@ -810,6 +810,32 @@
     let trafficData = [], currentTrafficPage = 1;
     const analyticsPageLimit = 10;
 
+    // ==========================================
+    // 🛡️ SECURITY: XSS SANITIZATION HELPERS
+    // ==========================================
+    function escapeHTML(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function escapeJS(str) {
+        if (str === null || str === undefined) return '';
+        // Safely slash-escapes characters to prevent breaking out of single-quoted JS strings in HTML attributes
+        return String(str)
+            .replace(/\\/g, '\\\\')
+            .replace(/'/g, '\\\'')
+            .replace(/"/g, '\\"')
+            .replace(/\n/g, '\\n')
+            .replace(/\r/g, '\\r')
+            .replace(/</g, '\\x3c')
+            .replace(/>/g, '\\x3e');
+    }
+
     document.getElementById('loginBtn').addEventListener('click', handleLogin);
     document.getElementById('blockBtn').addEventListener('click', blockDomains);
     document.getElementById('addRowBtn').addEventListener('click', () => addBlockRow());
@@ -844,9 +870,11 @@
         const tbody = document.getElementById('blockTableBody');
         const tr = document.createElement('tr');
         
+        const safeTarget = escapeHTML(defaultTarget);
+        
         tr.innerHTML = `
             <td>
-                <input type="text" class="block-target" placeholder="badsite.com or ^https:\/\/.*" value="${defaultTarget}" style="width: 100%; margin: 0;" required>
+                <input type="text" class="block-target" placeholder="badsite.com or ^https:\/\/.*" value="${safeTarget}" style="width: 100%; margin: 0;" required>
             </td>
             <td>
                 <select class="block-type" style="width: 100%; margin: 0;">
@@ -1099,16 +1127,22 @@
                 </select>
             `;
 
+            // Apply XSS Armor
+            const safeHash = escapeHTML(req.student_hash.substring(0, 16));
+            const safeUrl = escapeHTML(req.url);
+            const safeReason = escapeHTML(req.reason);
+            const jsSafeUrl = escapeJS(req.url);
+
             tr.innerHTML = `
                 <td>${date}</td>
-                <td class="hash-cell">${req.student_hash.substring(0, 16)}...</td>
-                <td><strong>${req.url}</strong></td>
-                <td class="reason-cell">${req.reason}</td>
+                <td class="hash-cell">${safeHash}...</td>
+                <td><strong>${safeUrl}</strong></td>
+                <td class="reason-cell">${safeReason}</td>
                 <td class="actions" style="flex-direction: column; align-items: flex-start;">
                     ${durationSelect}
                     <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn-approve" onclick="resolveRequest(${req.id}, 'approve', '${req.url}')">Approve</button>
-                        <button class="btn-deny" onclick="resolveRequest(${req.id}, 'deny', '${req.url}')">Deny</button>
+                        <button class="btn-approve" onclick="resolveRequest(${req.id}, 'approve', '${jsSafeUrl}')">Approve</button>
+                        <button class="btn-deny" onclick="resolveRequest(${req.id}, 'deny', '${jsSafeUrl}')">Deny</button>
                     </div>
                 </td>
             `;
@@ -1268,8 +1302,8 @@
             document.getElementById('btnNextRules').disabled = currentFilterPage >= totalFilterPages;
 
             data.rules.forEach(rule => {
-                const isBlock = rule.action === 'block';
-                const actionBadge = `<span style="background: ${isBlock ? 'var(--danger)' : 'var(--success)'}; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold; text-transform: uppercase;">${rule.action}</span>`;
+                const safeAction = escapeHTML(rule.action);
+                const actionBadge = `<span style="background: ${rule.action === 'block' ? 'var(--danger)' : 'var(--success)'}; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold; text-transform: uppercase;">${safeAction}</span>`;
                 
                 // 🎯 NEW: Format the expiration timestamp nicely
                 let expiresText = '<span style="color: var(--text-muted);">Permanent</span>';
@@ -1291,14 +1325,19 @@
                     }
                 }
 
+                // Apply XSS Armor
+                const safeTarget = escapeHTML(rule.target);
+                const safeMatchType = escapeHTML(rule.match_type);
+                const jsSafeTarget = escapeJS(rule.target);
+
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td style="font-family: monospace; font-size: 0.9rem;">${rule.target}</td>
-                    <td style="text-transform: capitalize;">${rule.match_type}</td>
+                    <td style="font-family: monospace; font-size: 0.9rem;">${safeTarget}</td>
+                    <td style="text-transform: capitalize;">${safeMatchType}</td>
                     <td>${actionBadge}</td>
                     <td style="font-size: 0.85rem;">${expiresText}</td>
                     <td style="text-align: center;">
-                        <button class="btn-deny" onclick="removeActiveRule(${rule.id}, '${rule.target}')" style="padding: 0.4rem 0.6rem;">Remove</button>
+                        <button class="btn-deny" onclick="removeActiveRule(${rule.id}, '${jsSafeTarget}')" style="padding: 0.4rem 0.6rem;">Remove</button>
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -1400,11 +1439,11 @@
                 roiTableContainer.style.display = 'none';
                 noDataMsg.style.display = 'block';
                 
-                const displayText = data.message || "No analytics data matched these filters.";
+                const safeMsg = escapeHTML(data.message || "No analytics data matched these filters.");
                 noDataMsg.innerHTML = `
                     <div style="text-align: center; padding: 3rem 1rem; color: var(--text-muted); border: 2px dashed var(--border-color); border-radius: 8px; margin-top: 1rem;">
                         <span style="font-size: 2rem; display: block; margin-bottom: 1rem;">📡</span>
-                        <strong>${displayText}</strong>
+                        <strong>${safeMsg}</strong>
                     </div>`;
                 return;
             }
@@ -1444,9 +1483,11 @@
             const isOutlier = avg > 60; // Flag if average is over 60 mins
             const flame = isOutlier ? '<span title="High average time per user!" style="color: var(--danger); margin-left: 0.5rem; font-size: 1.1rem;">🔥</span>' : '';
             
+            const safeTarget = escapeHTML(r.target);
+
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td><strong>${r.target}</strong></td>
+                <td><strong>${safeTarget}</strong></td>
                 <td>${r.total_minutes}</td>
                 <td>${r.unique_students}</td>
                 <td>${avg} min ${flame}</td>
@@ -1578,13 +1619,20 @@
         pageData.forEach(row => {
             const tr = document.createElement('tr');
             const domain = row.target.split('/')[0];
+            
+            const safeHash = escapeHTML(row.student_hash.substring(0, 16));
+            const safeFullHash = escapeHTML(row.student_hash);
+            const safeTarget = escapeHTML(row.target);
+            const jsSafeTarget = escapeJS(row.target);
+            const jsSafeDomain = escapeJS(domain);
+
             tr.innerHTML = `
-                <td class="hash-cell" title="${row.student_hash}">${row.student_hash.substring(0, 16)}...</td>
-                <td style="font-family: monospace; font-size: 0.85rem; word-break: break-all;">${row.target}</td>
+                <td class="hash-cell" title="${safeFullHash}">${safeHash}...</td>
+                <td style="font-family: monospace; font-size: 0.85rem; word-break: break-all;">${safeTarget}</td>
                 <td style="color: var(--danger); font-weight: bold;">${row.total_minutes} min</td>
                 <td class="actions">
-                    <button class="btn-deny" onclick="quickBlock('${row.target}', 'path')" title="Block this exact URL">Block Path</button>
-                    <button class="btn-deny" onclick="quickBlock('${domain}', 'domain')" title="Block the entire domain" style="background-color: var(--secondary);">Block Domain</button>
+                    <button class="btn-deny" onclick="quickBlock('${jsSafeTarget}', 'path')" title="Block this exact URL">Block Path</button>
+                    <button class="btn-deny" onclick="quickBlock('${jsSafeDomain}', 'domain')" title="Block the entire domain" style="background-color: var(--secondary);">Block Domain</button>
                 </td>
             `;
             tbody.appendChild(tr);
@@ -1662,18 +1710,23 @@
             // Status Badge styling
             const isApproved = row.status === 'approved';
             const badgeColor = isApproved ? 'var(--success)' : 'var(--danger)';
-            const statusBadge = `<span style="background: ${badgeColor}; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold;">${row.status.toUpperCase()}</span>`;
+            const safeStatus = escapeHTML(row.status.toUpperCase());
+            const statusBadge = `<span style="background: ${badgeColor}; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold;">${safeStatus}</span>`;
             
             // Extract the root domain for the "Block Domain" quick action
             const domain = row.target.split('/')[0];
+            
+            const safeTarget = escapeHTML(row.target);
+            const jsSafeTarget = escapeJS(row.target);
+            const jsSafeDomain = escapeJS(domain);
 
             tr.innerHTML = `
-                <td style="word-break: break-all; font-family: monospace; font-size: 0.85rem;">${row.target}</td>
+                <td style="word-break: break-all; font-family: monospace; font-size: 0.85rem;">${safeTarget}</td>
                 <td>${statusBadge}</td>
                 <td><strong>${row.hits}</strong></td>
                 <td class="actions">
-                    <button class="btn-deny" onclick="quickBlock('${row.target}', 'path')" title="Block this exact URL">Block Path</button>
-                    <button class="btn-deny" onclick="quickBlock('${domain}', 'domain')" title="Block the entire domain" style="background-color: var(--secondary);">Block Domain</button>
+                    <button class="btn-deny" onclick="quickBlock('${jsSafeTarget}', 'path')" title="Block this exact URL">Block Path</button>
+                    <button class="btn-deny" onclick="quickBlock('${jsSafeDomain}', 'domain')" title="Block the entire domain" style="background-color: var(--secondary);">Block Domain</button>
                 </td>
             `;
             tbody.appendChild(tr);
@@ -1748,10 +1801,14 @@
 
             data.apps.forEach(app => {
                 const tr = document.createElement('tr');
+                const safeDomain = escapeHTML(app.domain);
+                const safeAppName = escapeHTML(app.app_name);
+                const safeCategory = escapeHTML(app.category || 'General');
+
                 tr.innerHTML = `
-                    <td><strong>${app.domain}</strong></td>
-                    <td>${app.app_name}</td>
-                    <td><span style="background: var(--border-color); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem;">${app.category || 'General'}</span></td>
+                    <td><strong>${safeDomain}</strong></td>
+                    <td>${safeAppName}</td>
+                    <td><span style="background: var(--border-color); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem;">${safeCategory}</span></td>
                     <td>
                         <button class="btn-deny" onclick="removeApprovedApp(${app.id})">Remove</button>
                     </td>
@@ -1849,10 +1906,11 @@
             select.innerHTML = "";
             
             data.schools.forEach(s => {
+                const safeName = escapeHTML(s.name);
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>${s.id}</td>
-                    <td><strong>${s.name}</strong> ${s.id === 1 ? '(Default)' : ''}</td>
+                    <td><strong>${safeName}</strong> ${s.id === 1 ? '(Default)' : ''}</td>
                     <td>${new Date(s.created_at).toLocaleDateString()}</td>
                     <td>
                         ${s.id !== 1 ? `<button class="btn-deny" onclick="deleteSchool(${s.id})" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">Delete</button>` : ''}
@@ -1862,7 +1920,7 @@
 
                 const opt = document.createElement('option');
                 opt.value = s.id;
-                opt.textContent = s.name;
+                opt.textContent = s.name; // textContent automatically escapes
                 select.appendChild(opt);
             });
         } catch (e) { console.error("Error loading schools:", e); }
@@ -1911,11 +1969,15 @@
 
             data.users.forEach(u => {
                 const lastActive = u.last_active_at ? new Date(u.last_active_at).toLocaleString() : 'Never';
+                const safeUsername = escapeHTML(u.username);
+                const safeRole = escapeHTML(u.role.replace('_', ' '));
+                const safeSchoolName = escapeHTML(u.school_name);
+
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td><strong>${u.username}</strong></td>
-                    <td style="text-transform: capitalize;">${u.role.replace('_', ' ')}</td>
-                    <td>${u.school_name}</td>
+                    <td><strong>${safeUsername}</strong></td>
+                    <td style="text-transform: capitalize;">${safeRole}</td>
+                    <td>${safeSchoolName}</td>
                     <td style="font-size: 0.85rem;">${lastActive}</td>
                     <td class="actions">
                         <button class="btn-secondary" onclick="resetStaffPassword(${u.id})" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">Reset Pass</button>
@@ -1992,26 +2054,32 @@
             let schoolOptions = '';
             if (schoolRes.ok) {
                 const sData = await schoolRes.json();
-                schoolOptions = sData.schools.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+                schoolOptions = sData.schools.map(s => `<option value="${s.id}">${escapeHTML(s.name)}</option>`).join('');
             }
 
             const tbody = document.getElementById('studentsTableBody');
             tbody.innerHTML = "";
 
             data.students.forEach(st => {
+                const safeHashShort = escapeHTML(st.student_hash.substring(0, 20));
+                const safeHashFull = escapeHTML(st.student_hash);
+                const jsSafeHash = escapeJS(st.student_hash);
+                const safeSchoolName = escapeHTML(st.school_name);
+
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td class="hash-cell">${st.student_hash.substring(0, 20)}...</td>
-                    <td><strong>${st.school_name}</strong></td>
+                    <td class="hash-cell" title="${safeHashFull}">${safeHashShort}...</td>
+                    <td><strong>${safeSchoolName}</strong></td>
                     <td>${new Date(st.registered_at).toLocaleDateString()}</td>
                     <td class="actions">
-                        <select id="transfer-school-${st.student_hash}" style="padding: 0.3rem; font-size: 0.8rem;">
+                        <select id="transfer-school-${safeHashFull}" style="padding: 0.3rem; font-size: 0.8rem;">
                             ${schoolOptions}
                         </select>
-                        <button class="btn-primary" onclick="transferStudent('${st.student_hash}')" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">Move</button>
+                        <button class="btn-primary" onclick="transferStudent('${jsSafeHash}')" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">Move</button>
                     </td>
                 `;
                 tbody.appendChild(tr);
+                
                 const select = document.getElementById(`transfer-school-${st.student_hash}`);
                 if(select) select.value = st.school_id;
             });
@@ -2019,7 +2087,11 @@
     }
 
     async function transferStudent(hash) {
-        const newSchoolId = document.getElementById(`transfer-school-${hash}`).value;
+        const selectId = `transfer-school-${hash}`;
+        const selectEl = document.getElementById(selectId);
+        if (!selectEl) return;
+        const newSchoolId = selectEl.value;
+
         if (!newSchoolId) return;
         if (!confirm("Are you sure you want to forcibly transfer this device to a new school?")) return;
 

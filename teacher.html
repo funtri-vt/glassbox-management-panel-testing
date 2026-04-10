@@ -253,6 +253,32 @@
     let currentWorkerUrl = "";
     let currentSecret = ""; 
 
+    // ==========================================
+    // 🛡️ SECURITY: XSS SANITIZATION HELPERS
+    // ==========================================
+    function escapeHTML(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function escapeJS(str) {
+        if (str === null || str === undefined) return '';
+        // Safely slash-escapes characters to prevent breaking out of single-quoted JS strings in HTML attributes
+        return String(str)
+            .replace(/\\/g, '\\\\')
+            .replace(/'/g, '\\\'')
+            .replace(/"/g, '\\"')
+            .replace(/\n/g, '\\n')
+            .replace(/\r/g, '\\r')
+            .replace(/</g, '\\x3c')
+            .replace(/>/g, '\\x3e');
+    }
+
     document.getElementById('loginBtn').addEventListener('click', handleLogin);
 
     document.addEventListener('DOMContentLoaded', async () => {
@@ -348,8 +374,10 @@
             }
 
             data.classrooms.forEach(c => {
+                const safeName = escapeHTML(c.name);
+
                 const tr = document.createElement('tr');
-                tr.innerHTML = `<td><strong>${c.name}</strong></td><td>${c.student_count} Students</td>`;
+                tr.innerHTML = `<td><strong>${safeName}</strong></td><td>${c.student_count} Students</td>`;
                 tbody.appendChild(tr);
 
                 const opt = document.createElement('option');
@@ -379,7 +407,11 @@
             }
 
             data.rules.forEach(rule => {
-                const badge = `<span style="background: ${rule.action === 'block' ? 'var(--danger)' : 'var(--success)'}; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold; text-transform: uppercase;">${rule.action}</span>`;
+                const safeAction = escapeHTML(rule.action);
+                const safeClassroomName = escapeHTML(rule.classroom_name);
+                const safeTarget = escapeHTML(rule.target);
+
+                const badge = `<span style="background: ${rule.action === 'block' ? 'var(--danger)' : 'var(--success)'}; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold; text-transform: uppercase;">${safeAction}</span>`;
                 
                 let expiresText = 'Permanent';
                 if (rule.expires_at) {
@@ -389,8 +421,8 @@
 
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${rule.classroom_name}</td>
-                    <td style="font-family: monospace;">${rule.target}</td>
+                    <td>${safeClassroomName}</td>
+                    <td style="font-family: monospace;">${safeTarget}</td>
                     <td>${badge}</td>
                     <td>${expiresText}</td>
                     <td><button class="btn-deny" onclick="removeRule(${rule.id})" style="padding: 0.3rem 0.6rem;">Remove</button></td>
